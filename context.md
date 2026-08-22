@@ -17,6 +17,18 @@ For ICSC 2026, build SafeCO, an explainable prototype that helps an engineer cat
 
 SafeCO observes commands and process state in a simulated water tank controlled over Modbus TCP. It identifies malformed, replayed, mistimed, and gradually unsafe commands, then presents equipment, evidence, severity, and next action in engineer-friendly language.
 
+## Reusable detector boundary
+
+The hackathon demonstration uses Adupe's water process, but the detector is designed around a generic event and asset interface: command, target asset, value, operating mode, telemetry snapshot, sequence/timestamp, and ground truth. Infrastructure-specific adapters can translate electricity, water, or another control process into that interface. We demonstrate water only; a second infrastructure simulator is outside this hackathon scope.
+
+## Synthetic data source
+
+No external operational dataset is required or assumed. Our deterministic simulator and scenario scripts generate the data. Normal startup, running, shutdown, maintenance, grid outage, and generator recovery produce benign records. Attack scripts produce injection, replay, mistimed-command, and drift records with ground-truth labels. Seeds, scenario definitions, and generator versions are recorded so the dataset can be regenerated. Add sensor noise, timing jitter, benign anomalies, and complete held-out scenarios to avoid an unrealistically clean evaluation.
+
+## Hybrid detector decision
+
+SafeCO uses a hybrid detector. Deterministic safety invariants and state-transition checks handle known physical hazards; replay, sequence, rate, and drift checks handle command behaviour; an optional robust statistical baseline handles deviations not covered by rules. ML never replaces safety rules, and every alert retains a human-readable reason and evidence.
+
 ## Nigerian operating context
 
 - Grid outages and generator/recovery transitions are expected operating events, not attacks by default.
