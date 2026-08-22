@@ -12,6 +12,12 @@ class ProcessSnapshot:
     tank_level: float
     valve_state: str
     pump_state: str
+    inlet_valve_state: str = "unknown"
+    outlet_valve_state: str = "unknown"
+    mode: str = "unknown"
+    power_source: str = "unknown"
+    target_level: float | None = None
+    high_level_limit: float | None = None
 
 
 @dataclass(frozen=True)
@@ -36,4 +42,3 @@ class Event:
 
     def canonical_json(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
-
