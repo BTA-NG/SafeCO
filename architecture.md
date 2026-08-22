@@ -20,6 +20,10 @@ Attack and normal scripts feed a Modbus TCP simulator. The simulator feeds a col
 
 ## Components
 
+### Reusable infrastructure adapter
+
+The detector core consumes a normalized asset/event interface rather than water-specific names. Adupe is the reference adapter for the demo. A future electricity adapter could map feeder, breaker, voltage, frequency, and setpoint events into the same contract. We do not build or claim a second infrastructure simulator during this hackathon.
+
 ### Process simulator
 
 Python model with tank level, inlet pump, inlet and outlet valves, flow, power source, setpoints, and modes: startup, running, maintenance, shutdown, recovery. Expose the register map in `src/safeco/plant.py` over Modbus TCP using pymodbus. Include deterministic seeds and a clock multiplier. Explicit invariants: pump cannot run without an open inlet path; tank level remains within safe limits; setpoint changes are rate-limited and authorised in maintenance; command sequences respect mode transitions; grid-to-generator recovery is legitimate when sequenced correctly.

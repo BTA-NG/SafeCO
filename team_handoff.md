@@ -8,14 +8,16 @@ Product: **SafeCO**, a local-first advisory monitor for **Adupe Municipal Water 
 
 This document is the working agreement for Daniel, Mahoraga, Ebi, and Joseph. Read it together with `architecture.md` and `context.md`. If a proposed feature conflicts with those files, stop and agree on a deliberate change before implementing it.
 
+Repository workflow is defined in `CONTRIBUTING.md`. It covers branches, commits, pull requests, reviews, contracts, and local checks.
+
 ## Team ownership
 
 | Person | Role | Primary ownership | Required handoff |
 |---|---|---|---|
 | Daniel | Backend, integrity, and integration engineer; team captain | Collector, SQLite storage, event hash-chain, runtime orchestration, integration, final demo, submission | Delivers working backend code and maintains decisions, risks, and release checklist |
 | Mahoraga | OT simulator and scenarios engineer | Tank model, Modbus register map, normal operation, attack scripts, reproducible seeds | Documents register map, scenario steps, expected ground truth |
-| Ebi | Detection and evaluation engineer | Layered detector, metrics, threshold tuning, held-out scenarios, error analysis | Publishes detector API, test fixtures, and evaluation report; consumes Daniel's event stream |
-| Joseph | Platform/UI and documentation engineer | FastAPI, dashboard, offline behaviour, packaging, screenshots, technical write-up | Maintains runbook, UI/API contract, demo script |
+| Joseph | Detection and evaluation engineer | Layered detector, metrics, threshold tuning, held-out scenarios, error analysis | Publishes detector API, test fixtures, and evaluation report; consumes Daniel's event stream |
+| Ebi | Platform/UI and documentation engineer | FastAPI, dashboard, offline behaviour, packaging, screenshots, API documentation | Maintains runbook, UI/API contract, and demo screen |
 
 These assignments are defaults based on work boundaries, not assumptions about seniority. A person may help another owner, but each deliverable has one accountable owner.
 
@@ -42,17 +44,17 @@ Start from `src/safeco/plant.py` and `docs/plant_contract.md`. Implement a deter
 
 Then add four separately reproducible attack scripts: command injection, replay, valid command in an unsafe state, and slow setpoint/high-limit drift. Each script must record scenario ID, seed, ground truth, command sequence, expected physical consequence, and known limitation.
 
-### Ebi: detector and evaluation
+### Joseph: detector and evaluation
 
-Consume the `Event` contract in `src/safeco/events.py`; do not create a second event format. First handoff: a pure detector function accepts an event/history and returns zero or more alerts containing `alert_id`, `event_id`, `severity`, `reason_code`, `title`, `explanation`, `evidence`, `recommended_action`, `confidence`, and `acknowledged`.
+Joseph consumes the `Event` contract in `src/safeco/events.py`; do not create a second event format. First handoff: a pure detector function accepts an event/history and returns zero or more alerts containing `alert_id`, `event_id`, `severity`, `reason_code`, `title`, `explanation`, `evidence`, `recommended_action`, `confidence`, and `acknowledged`.
 
-Implement in order: invariant rules, replay checks, rate/drift checks, then robust statistical baselines only if needed. Treat correctly sequenced maintenance, demand variation, grid loss, and generator recovery as benign. Keep complete scenarios held out for evaluation and report recall, precision, false alerts per normal hour, latency, and failures.
+Joseph implements in order: invariant rules, replay checks, rate/drift checks, then robust statistical baselines only if needed. Treat correctly sequenced maintenance, demand variation, grid loss, and generator recovery as benign. Keep complete scenarios held out for evaluation and report recall, precision, false alerts per normal hour, latency, and failures.
 
-### Joseph: API, dashboard, and write-up
+### Ebi: API and dashboard
 
-Build against the shared event and alert contracts; do not invent dashboard-only state. First handoff: a local page displays tank level, pump, inlet/outlet valves, power source, operating mode, recent events, and an alert placeholder using backend data. The dashboard must continue locally without internet and clearly indicate degraded visibility if the local control feed is lost.
+Ebi builds against the shared event and alert contracts; do not invent dashboard-only state. First handoff: a local page displays tank level, pump, inlet/outlet valves, power source, operating mode, recent events, and an alert placeholder using backend data. The dashboard must continue locally without internet and clearly indicate degraded visibility if the local control feed is lost.
 
-Alert text must answer what happened, affected equipment, current context, why it matters, confidence, evidence, and recommended human action. SafeCO is advisory; the interface must never imply that it automatically stopped equipment.
+Ebi's alert presentation must answer what happened, affected equipment, current context, why it matters, confidence, evidence, and recommended human action. SafeCO is advisory; the interface must never imply that it automatically stopped equipment.
 
 ## Accuracy rules
 
@@ -95,7 +97,7 @@ No component is integrated until it has a README, one command to run it, determi
 
 ### 20–23 August: foundation
 
-Daniel creates the repository layout, SQLite schema, event repository, event hash-chain, runtime entrypoint, issue board, branch rules, and a single `make demo`/equivalent command. Mahoraga defines the process model, register map, invariants, and normal scenarios. Ebi finalises detector input/output schemas and labelled fixtures. Joseph creates the FastAPI shell, health endpoint, and dashboard wireframe.
+Daniel creates the repository layout, SQLite schema, event repository, event hash-chain, runtime entrypoint, issue board, branch rules, and a single `make demo`/equivalent command. Mahoraga defines the process model, register map, invariants, and normal scenarios. Joseph finalises detector input/output schemas and labelled fixtures. Ebi creates the FastAPI shell, health endpoint, and dashboard wireframe.
 
 Exit criteria: a clean laptop can start the simulator, generate one normal event, store it, and retrieve it through the API.
 
@@ -103,31 +105,31 @@ The foundation must include the authoritative plant/register contract and tests 
 
 ### 24–27 August: normal plant and data
 
-Mahoraga implements startup, running, maintenance, and shutdown with deterministic replay. Daniel implements collection, raw-event persistence, hash verification, and the first end-to-end integration. Ebi consumes the stored event stream for detector development. Joseph connects a live process-state view.
+Mahoraga implements startup, running, maintenance, and shutdown with deterministic replay. Daniel implements collection, raw-event persistence, hash verification, and the first end-to-end integration. Joseph consumes the stored event stream for detector development. Ebi connects a live process-state view.
 
 Exit criteria: normal operation runs for at least ten simulated minutes; maintenance is not falsely flagged; generated data can be recreated from a seed.
 
 ### 28–31 August: selection and attack generation
 
-Mahoraga implements command injection, replay, mistimed valid command, and slow drift scenarios. Ebi labels expected outcomes and builds held-out scenario sets. Joseph adds scenario controls and an alert placeholder. Daniel wires each scenario into the runtime, verifies event integrity, confirms the Track E selection is submitted by 31 August, and freezes scope.
+Mahoraga implements command injection, replay, mistimed valid command, and slow drift scenarios. Joseph labels expected outcomes and builds held-out scenario sets. Ebi adds scenario controls and an alert placeholder. Daniel wires each scenario into the runtime, verifies event integrity, confirms the Track E selection is submitted by 31 August, and freezes scope.
 
 Exit criteria: each attack has a one-command reproducer, ground truth, expected safety impact, and a visible event trace.
 
 ### 1–7 September: detector and evaluation
 
-Ebi implements invariant rules first, then replay, rate/drift, and baseline checks. Mahoraga validates process realism and adds benign anomalies. Joseph renders alert explanations and acknowledgement. Daniel builds the integration-test harness, event replay, API wiring, and integrity-failure tests.
+Joseph implements invariant rules first, then replay, rate/drift, and baseline checks. Mahoraga validates process realism and adds benign anomalies. Ebi renders alert explanations and acknowledgement. Daniel builds the integration-test harness, event replay, API wiring, and integrity-failure tests.
 
 Exit criteria: all four attack types are detected in the held-out set; metrics include recall, precision, false alerts per normal hour, and latency; known misses are documented.
 
 ### 8–14 September: hardening and demo
 
-Joseph completes dashboard, offline queue/catch-up, evidence detail, and export. Ebi tunes thresholds without hiding failures. Mahoraga adds attack timing and telemetry noise. Daniel implements and validates local queue recovery, hash-chain verification, failure tests, security review, and full demo rehearsal.
+Ebi completes dashboard, offline queue/catch-up, evidence detail, and export. Joseph tunes thresholds without hiding failures. Mahoraga adds attack timing and telemetry noise. Daniel implements and validates local queue recovery, hash-chain verification, failure tests, security review, and full demo rehearsal.
 
 Exit criteria: disconnecting the UI does not stop collection; reconnect catches up; uncertain alerts remain advisory; the complete demo works from a fresh checkout.
 
 ### 15–20 September: submission package
 
-Daniel owns the release candidate, startup packaging, backend code review, and submission folder. Joseph leads the four-page write-up, screenshots, and plain-language limitations. Ebi supplies metric tables and error analysis. Mahoraga supplies simulator/attack methodology and architecture figures. All four rehearse a five-minute demo and a two-minute judge Q&A.
+Daniel owns the release candidate, startup packaging, backend code review, final technical write-up, and submission folder. Ebi supplies dashboard screenshots and API documentation. Joseph supplies metric tables and error analysis. Mahoraga supplies simulator/attack methodology and architecture figures. All four rehearse a five-minute demo and a two-minute judge Q&A.
 
 Exit criteria: code link, working demo, write-up (maximum four pages), run instructions, synthetic-data explanation, and video/screenshots are complete and tested.
 
