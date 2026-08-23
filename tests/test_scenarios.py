@@ -59,3 +59,26 @@ def test_steady_running_stays_below_high_limit():
     assert all("tank_above_high_level_limit" not in v for v in result.violations)
     assert len(result.snapshots) == 13  # 1 config + 6 x (drain + fill)
     assert result.final_state["tank_level"] < result.final_state["high_level_limit"]
+
+
+def test_controlled_shutdown_ends_cleanly():
+    result = run_scenario("controlled_shutdown_01", seed=42)
+    assert all(v == [] for v in result.violations)
+    final = result.final_state
+    assert final["mode"] == "shutdown"
+    assert final["pump_on"] is False
+    assert final["inlet_valve_open"] is False
+
+
+def test_grid_recovery_is_benign_and_ends_on_generator_power():
+    result = run_scenario("grid_recovery_01", seed=42)
+    assert all(v == [] for v in result.violations)
+    final = result.final_state
+    assert final["power_source"] == "generator"
+    assert final["mode"] == "running"
+
+
+def test_scenarios_are_deterministic_from_seed():
+    a = run_scenario("grid_recovery_01", seed=42).snapshots
+    b = run_scenario("grid_recovery_01", seed=42).snapshots
+    assert a == b

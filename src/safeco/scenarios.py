@@ -80,7 +80,36 @@ def steady_running_steps() -> list[Step]:
     return steps
 
 
+def controlled_shutdown_steps() -> list[Step]:
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("stop_pump", 2.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0)),
+        ("close_inlet", 2.0, lambda s: s.apply_coil(Register.INLET_VALVE_COMMAND, 0)),
+        ("drain_via_demand", 10.0, None),
+        ("enter_shutdown", 1.0, lambda s: s.apply_holding(Register.MODE_COMMAND, 0)),
+    ]
+
+
+def grid_recovery_steps() -> list[Step]:
+    def restart(sim: PlantSimulator) -> None:
+        sim.apply_coil(Register.PUMP_COMMAND, 1)
+        sim.apply_holding(Register.MODE_COMMAND, 2)
+
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("grid_loss", 5.0, lambda s: s.state.begin_grid_recovery()),
+        ("transfer_to_generator", 3.0, lambda s: s.state.transfer_to_generator()),
+        ("resume_after_recovery", 5.0, lambda s: s.state.resume_after_recovery()),
+        ("restart_and_run", 10.0, restart),
+    ]
+
+
 NORMAL_SCENARIOS.update({
     "startup_01": startup_steps,
     "steady_running_01": steady_running_steps,
+})
+
+NORMAL_SCENARIOS.update({
+    "controlled_shutdown_01": controlled_shutdown_steps,
+    "grid_recovery_01": grid_recovery_steps,
 })
