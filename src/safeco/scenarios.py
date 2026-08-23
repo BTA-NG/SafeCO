@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from .plant import Register
+from .simulator import CommandRecord, PlantSimulator
+
+GENERATOR_VERSION = "safeco-scenarios/1.0"
+
+Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
+
+
+@dataclass
+class ScenarioResult:
+    scenario_id: str
+    seed: int
+    generator_version: str = GENERATOR_VERSION
+    commands: list[CommandRecord] = field(default_factory=list)
+    snapshots: list[dict] = field(default_factory=list)
+    violations: list[list[str]] = field(default_factory=list)
+
+    @property
+    def final_state(self) -> dict:
+        return self.snapshots[-1]
+
+
+def _configure_running(sim: PlantSimulator) -> None:
+    sim.apply_coil(Register.INLET_VALVE_COMMAND, 1)
+    sim.apply_coil(Register.OUTLET_VALVE_COMMAND, 1)
+    sim.apply_coil(Register.PUMP_COMMAND, 1)
+    sim.apply_holding(Register.MODE_COMMAND, 2)  # RUNNING
+
+
+def _execute(scenario_id: str, seed: int, steps: list[Step], *,
+             on_command=None, on_snapshot=None) -> ScenarioResult:
+    sim = PlantSimulator(seed=seed)
+    sim.on_command = on_command
+    result = ScenarioResult(scenario_id, seed)
+    for phase, seconds, action in steps:
+        if action is not None:
+            action(sim)
+        result.violations.append(sim.step(seconds))
+        snap = sim.snapshot()
+        snap["phase"] = phase
+        result.snapshots.append(snap)
+        if on_snapshot is not None:
+            on_snapshot(snap)
+    result.commands.extend(sim.commands)
+    return result
+
+
+NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
+
+
+def run_scenario(name: str, seed: int = 42, *, on_command=None,
+                 on_snapshot=None) -> ScenarioResult:
+    if name not in NORMAL_SCENARIOS:
+        raise KeyError(f"unknown scenario {name!r}; known: {sorted(NORMAL_SCENARIOS)}")
+    return _execute(name, seed, NORMAL_SCENARIOS[name](),
+                    on_command=on_command, on_snapshot=on_snapshot)
