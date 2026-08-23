@@ -34,3 +34,25 @@ Adupe is a fictional, representative Nigerian municipal water facility. It is no
 Normal: startup, steady demand, controlled shutdown, authorised setpoint maintenance, grid outage, generator recovery.
 
 Attacks: injected pump command, old command replay, valid command in an unsafe state, slow high-level/setpoint drift.
+
+## Normal scenario catalogue (foundation handoff)
+
+Run any scenario with a fixed seed:
+
+    PYTHONPATH=src .venv/bin/python - <<'EOF'
+    from safeco.scenarios import run_scenario
+    result = run_scenario("startup_01", seed=42)
+    print(result.final_state)
+    EOF
+
+| Scenario ID | Ground truth | Expected outcome |
+|---|---|---|
+| startup_01 | normal | SHUTDOWN -> inlet open -> pump on -> RUNNING; no invariant violations; level rises |
+| steady_running_01 | normal | 121 s pump duty cycle; level stays below high-level limit throughout |
+| controlled_shutdown_01 | normal | pump off -> inlet closed -> demand drain -> SHUTDOWN; no violations |
+| grid_recovery_01 | normal | grid loss -> pump stop -> RECOVERY -> generator transfer -> STARTUP -> RUNNING on GENERATOR; benign |
+
+Snapshots carry a `phase` key matching the step names above. Every applied command is
+available via `result.commands` / the simulator's `on_command` callback for downstream
+collection. Each `ScenarioResult` records its seed and generator version so any dataset
+can be regenerated exactly.
