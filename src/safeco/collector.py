@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .events import Event, ProcessSnapshot
 from .plant import PlantState
 from .storage import EventStore
+
+if TYPE_CHECKING:
+    from .simulator import CommandRecord, PlantSimulator
 
 
 class EventCollector:
@@ -56,6 +59,26 @@ class EventCollector:
         )
         self.store.append(event)
         return event
+
+    def record_simulator_command(
+        self,
+        simulator: PlantSimulator,
+        command: CommandRecord,
+        *,
+        source: str = "scheduler",
+        ground_truth: str = "normal",
+        raw: dict[str, Any] | None = None,
+    ) -> Event:
+        """Persist one simulator command with its resulting process state."""
+        return self.record(
+            simulator.state,
+            source=source,
+            command=f"write_{command.kind}",
+            target=command.target,
+            value=command.value,
+            ground_truth=ground_truth,
+            raw={"address": command.address, "kind": command.kind, **(raw or {})},
+        )
 
 
 def plant_snapshot(plant: PlantState) -> dict[str, Any]:

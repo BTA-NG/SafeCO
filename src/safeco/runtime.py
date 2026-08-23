@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 
 from .collector import EventCollector
-from .plant import OperatingMode, PlantState
+from .plant import OperatingMode, PlantState, Register
+from .simulator import PlantSimulator
 from .storage import EventStore
 
 
@@ -35,6 +36,32 @@ def run_sample(database: str = "data/safeco.db", seed: int = 42) -> int:
     valid, event_id = store.verify_chain()
     events = store.list_events(limit=2)
     print(f"recorded={len(events)} chain_valid={valid} invalid_event={event_id}")
+    store.close()
+    return 0 if valid else 1
+
+
+def run_simulator_sample(
+    database: str = "data/safeco.db",
+    seed: int = 42,
+    detector=None,
+) -> int:
+    """Persist deterministic simulator commands and notify a detector adapter."""
+    store = EventStore(database)
+    simulator = PlantSimulator(seed=seed)
+    collector = EventCollector(store, "startup_integration_01", seed=seed)
+
+    def collect(command) -> None:
+        event = collector.record_simulator_command(simulator, command)
+        if detector is not None:
+            detector(event)
+
+    simulator.on_command = collect
+    simulator.apply_coil(Register.INLET_VALVE_COMMAND, 1)
+    simulator.apply_coil(Register.PUMP_COMMAND, 1)
+    simulator.apply_holding(Register.MODE_COMMAND, int(OperatingMode.RUNNING))
+    simulator.step(seconds=5)
+
+    valid, _ = store.verify_chain()
     store.close()
     return 0 if valid else 1
 
