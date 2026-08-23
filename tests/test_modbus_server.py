@@ -28,6 +28,8 @@ async def _round_trip() -> None:
         assert await client.connect() is True
         response = await client.write_register(int(Register.MODE_COMMAND), 2)
         assert not response.isError()
+        assert server.rejected_writes == []
+        assert sim.state.mode.value == 2  # RUNNING reached the simulator
         state = await client.read_input_registers(int(Register.PUMP_STATE), count=1)
         level = await client.read_input_registers(int(Register.TANK_LEVEL), count=1)
         assert state.registers[0] in (0, 1)
