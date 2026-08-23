@@ -1,2 +1,1 @@
 """SafeCO backend foundation."""
-

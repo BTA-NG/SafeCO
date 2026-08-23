@@ -4,6 +4,7 @@ import asyncio
 import threading
 
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext
+
 try:
     from pymodbus.datastore import ModbusDeviceContext
 except ImportError:  # pymodbus < 3.10 renamed slave->device
@@ -34,9 +35,14 @@ class WatchedBlock(ModbusSequentialDataBlock):
 class ModbusPlantServer:
     """Expose one PlantSimulator over local Modbus TCP with a clock multiplier."""
 
-    def __init__(self, simulator: PlantSimulator, host: str = "127.0.0.1",
-                 port: int = 5020, sim_seconds_per_real_second: float = 60.0,
-                 tick_interval: float = 0.1) -> None:
+    def __init__(
+        self,
+        simulator: PlantSimulator,
+        host: str = "127.0.0.1",
+        port: int = 5020,
+        sim_seconds_per_real_second: float = 60.0,
+        tick_interval: float = 0.1,
+    ) -> None:
         self.simulator = simulator
         self.host, self.port = host, port
         self.tick_interval = tick_interval
@@ -91,8 +97,10 @@ class ModbusPlantServer:
     def start(self) -> None:
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(
-            target=lambda: (asyncio.set_event_loop(self._loop),
-                            self._loop.run_until_complete(self._serve())),
+            target=lambda: (
+                asyncio.set_event_loop(self._loop),
+                self._loop.run_until_complete(self._serve()),
+            ),
             daemon=True,
         )
         self._thread.start()
@@ -104,7 +112,8 @@ class ModbusPlantServer:
             pending = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
             if pending:
                 self._loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True))
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
         except RuntimeError:
             pass
         self._loop.close()

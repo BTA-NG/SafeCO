@@ -32,8 +32,9 @@ def _configure_running(sim: PlantSimulator) -> None:
     sim.apply_holding(Register.MODE_COMMAND, 2)  # RUNNING
 
 
-def _execute(scenario_id: str, seed: int, steps: list[Step], *,
-             on_command=None, on_snapshot=None) -> ScenarioResult:
+def _execute(
+    scenario_id: str, seed: int, steps: list[Step], *, on_command=None, on_snapshot=None
+) -> ScenarioResult:
     sim = PlantSimulator(seed=seed)
     sim.on_command = on_command
     result = ScenarioResult(scenario_id, seed)
@@ -53,12 +54,18 @@ def _execute(scenario_id: str, seed: int, steps: list[Step], *,
 NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
 
 
-def run_scenario(name: str, seed: int = 42, *, on_command=None,
-                 on_snapshot=None) -> ScenarioResult:
+def run_scenario(
+    name: str, seed: int = 42, *, on_command=None, on_snapshot=None
+) -> ScenarioResult:
     if name not in NORMAL_SCENARIOS:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(NORMAL_SCENARIOS)}")
-    return _execute(name, seed, NORMAL_SCENARIOS[name](),
-                    on_command=on_command, on_snapshot=on_snapshot)
+    return _execute(
+        name,
+        seed,
+        NORMAL_SCENARIOS[name](),
+        on_command=on_command,
+        on_snapshot=on_snapshot,
+    )
 
 
 def startup_steps() -> list[Step]:
@@ -73,10 +80,12 @@ def startup_steps() -> list[Step]:
 def steady_running_steps() -> list[Step]:
     steps: list[Step] = [("configure_running", 1.0, _configure_running)]
     for i in range(6):
-        steps.append((f"demand_drain_{i}", 8.0,
-                      lambda s: s.apply_coil(Register.PUMP_COMMAND, 0)))
-        steps.append((f"pump_fill_{i}", 12.0,
-                      lambda s: s.apply_coil(Register.PUMP_COMMAND, 1)))
+        steps.append(
+            (f"demand_drain_{i}", 8.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0))
+        )
+        steps.append(
+            (f"pump_fill_{i}", 12.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1))
+        )
     return steps
 
 
@@ -104,12 +113,16 @@ def grid_recovery_steps() -> list[Step]:
     ]
 
 
-NORMAL_SCENARIOS.update({
-    "startup_01": startup_steps,
-    "steady_running_01": steady_running_steps,
-})
+NORMAL_SCENARIOS.update(
+    {
+        "startup_01": startup_steps,
+        "steady_running_01": steady_running_steps,
+    }
+)
 
-NORMAL_SCENARIOS.update({
-    "controlled_shutdown_01": controlled_shutdown_steps,
-    "grid_recovery_01": grid_recovery_steps,
-})
+NORMAL_SCENARIOS.update(
+    {
+        "controlled_shutdown_01": controlled_shutdown_steps,
+        "grid_recovery_01": grid_recovery_steps,
+    }
+)

@@ -1,12 +1,11 @@
 import pytest
 
-from safeco.plant import OperatingMode, Register
+from safeco.plant import Register
 from safeco.scenarios import (
     GENERATOR_VERSION,
     NORMAL_SCENARIOS,
     ScenarioResult,
     Step,
-    _execute,
     run_scenario,
 )
 
@@ -26,8 +25,9 @@ def test_execute_emits_one_snapshot_per_step_and_forwards_commands():
     NORMAL_SCENARIOS["_demo"] = _demo_steps
     try:
         snaps, cmds = [], []
-        result = run_scenario("_demo", seed=42,
-                              on_command=cmds.append, on_snapshot=snaps.append)
+        result = run_scenario(
+            "_demo", seed=42, on_command=cmds.append, on_snapshot=snaps.append
+        )
     finally:
         del NORMAL_SCENARIOS["_demo"]
     assert len(result.snapshots) == len(result.violations) == len(snaps) == 1
