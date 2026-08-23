@@ -8,7 +8,6 @@ from typing import Iterable
 
 from .events import Event
 
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
     row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,4 +116,3 @@ class EventStore:
 
     def close(self) -> None:
         self.connection.close()
-

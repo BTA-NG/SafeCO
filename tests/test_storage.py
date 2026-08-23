@@ -25,7 +25,6 @@ def test_event_store_appends_and_verifies(tmp_path):
     store.close()
 
 
-
 def test_event_store_detects_tampering(tmp_path):
     store = EventStore(tmp_path / "events.db")
     store.append(sample_event())

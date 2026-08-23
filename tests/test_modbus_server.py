@@ -89,15 +89,21 @@ async def _rejected_write_round_trip() -> None:
         assert await client.connect() is True
         response = await client.write_register(int(Register.TARGET_LEVEL), 7500)
         assert not response.isError()
-        readback = await client.read_holding_registers(int(Register.TARGET_LEVEL), count=1)
+        readback = await client.read_holding_registers(
+            int(Register.TARGET_LEVEL), count=1
+        )
         assert readback.registers[0] == 7500
         response = await client.write_register(int(Register.MODE_COMMAND), 2)
         assert not response.isError()
-        readback = await client.read_holding_registers(int(Register.MODE_COMMAND), count=1)
+        readback = await client.read_holding_registers(
+            int(Register.MODE_COMMAND), count=1
+        )
         assert readback.registers[0] == 2
         response = await client.write_register(int(Register.MODE_COMMAND), 9)
         assert response.isError()
-        readback = await client.read_holding_registers(int(Register.MODE_COMMAND), count=1)
+        readback = await client.read_holding_registers(
+            int(Register.MODE_COMMAND), count=1
+        )
         assert readback.registers[0] == 2
         assert (int(Register.MODE_COMMAND), 9) in server.rejected_writes
         response = await client.write_register(int(Register.TARGET_LEVEL), 8000)

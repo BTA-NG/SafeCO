@@ -45,8 +45,13 @@ HOLDING_TARGETS = {
 class PlantSimulator:
     """Deterministic process model bound to the documented Adupe register map."""
 
-    def __init__(self, state: PlantState | None = None, *, seed: int = 42,
-                 noise_scale: float = 0.0) -> None:
+    def __init__(
+        self,
+        state: PlantState | None = None,
+        *,
+        seed: int = 42,
+        noise_scale: float = 0.0,
+    ) -> None:
         self.state = state if state is not None else PlantState()
         self.rng = random.Random(seed)
         self.noise_scale = noise_scale

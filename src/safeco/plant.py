@@ -61,7 +61,10 @@ class PlantState:
             violations.append("pump_running_with_inlet_closed")
         if self.pump_on and self.power_source == PowerSource.OFF:
             violations.append("pump_running_without_power")
-        if self.mode == OperatingMode.RUNNING and self.tank_level > self.high_level_limit:
+        if (
+            self.mode == OperatingMode.RUNNING
+            and self.tank_level > self.high_level_limit
+        ):
             violations.append("tank_above_high_level_limit")
         return violations
 
@@ -69,7 +72,9 @@ class PlantState:
         inflow = 1.0 if self.pump_on and self.inlet_valve_open else 0.0
         outflow = 0.35 if self.outlet_valve_open else 0.0
         self.flow_rate = inflow - outflow
-        self.tank_level = min(100.0, max(0.0, self.tank_level + self.flow_rate * seconds))
+        self.tank_level = min(
+            100.0, max(0.0, self.tank_level + self.flow_rate * seconds)
+        )
 
     def begin_grid_recovery(self) -> None:
         self.pump_on = False
@@ -78,7 +83,9 @@ class PlantState:
 
     def transfer_to_generator(self) -> None:
         if self.mode != OperatingMode.RECOVERY or self.pump_on:
-            raise ValueError("generator transfer requires recovery mode with pump stopped")
+            raise ValueError(
+                "generator transfer requires recovery mode with pump stopped"
+            )
         self.power_source = PowerSource.GENERATOR
 
     def resume_after_recovery(self) -> None:
@@ -88,4 +95,3 @@ class PlantState:
             raise ValueError("a power source must be available")
         self.inlet_valve_open = True
         self.mode = OperatingMode.STARTUP
-

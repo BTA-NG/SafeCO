@@ -11,7 +11,9 @@ from .storage import EventStore
 class EventCollector:
     """Translate plant state/commands into the shared persisted event contract."""
 
-    def __init__(self, store: EventStore, scenario_id: str, seed: int | None = None) -> None:
+    def __init__(
+        self, store: EventStore, scenario_id: str, seed: int | None = None
+    ) -> None:
         self.store = store
         self.scenario_id = scenario_id
         self.seed = seed
