@@ -84,3 +84,22 @@ def test_holding_reads_echo_configured_values():
     sim.apply_holding(Register.HIGH_LEVEL_LIMIT, 9000)
     sim.apply_holding(Register.MODE_COMMAND, 2)
     assert [sim.read_holding(a) for a in (200, 201, 202)] == [7000, 9000, 2]
+
+
+def test_same_seed_noise_produces_identical_streams():
+    a = PlantSimulator(seed=7, noise_scale=0.5)
+    b = PlantSimulator(seed=7, noise_scale=0.5)
+    for sim in (a, b):
+        sim.step(3)
+        sim.read_input(Register.TANK_LEVEL)
+        sim.step(2)
+    assert a.read_input(Register.TANK_LEVEL) == b.read_input(Register.TANK_LEVEL)
+
+
+def test_zero_noise_is_fully_deterministic():
+    a = PlantSimulator(seed=1)
+    b = PlantSimulator(seed=999)
+    for sim in (a, b):
+        sim.apply_coil(Register.PUMP_COMMAND, 1)
+        sim.step(5)
+    assert a.read_input(Register.TANK_LEVEL) == b.read_input(Register.TANK_LEVEL)
