@@ -42,3 +42,20 @@ def test_result_records_generator_version():
         assert run_scenario("_demo").generator_version == GENERATOR_VERSION
     finally:
         del NORMAL_SCENARIOS["_demo"]
+
+
+def test_startup_scenario_reaches_running_without_violations():
+    result = run_scenario("startup_01", seed=42)
+    assert all(v == [] for v in result.violations)
+    final = result.final_state
+    assert final["mode"] == "running"
+    assert final["pump_on"] is True
+    levels = [s["tank_level"] for s in result.snapshots]
+    assert levels[-1] > levels[0]
+
+
+def test_steady_running_stays_below_high_limit():
+    result = run_scenario("steady_running_01", seed=42)
+    assert all("tank_above_high_level_limit" not in v for v in result.violations)
+    assert len(result.snapshots) == 13  # 1 config + 6 x (drain + fill)
+    assert result.final_state["tank_level"] < result.final_state["high_level_limit"]

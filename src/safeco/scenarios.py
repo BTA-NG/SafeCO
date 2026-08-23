@@ -59,3 +59,28 @@ def run_scenario(name: str, seed: int = 42, *, on_command=None,
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(NORMAL_SCENARIOS)}")
     return _execute(name, seed, NORMAL_SCENARIOS[name](),
                     on_command=on_command, on_snapshot=on_snapshot)
+
+
+def startup_steps() -> list[Step]:
+    return [
+        ("initial_shutdown", 1.0, None),
+        ("open_inlet", 1.0, lambda s: s.apply_coil(Register.INLET_VALVE_COMMAND, 1)),
+        ("start_pump", 5.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1)),
+        ("enter_running", 30.0, lambda s: s.apply_holding(Register.MODE_COMMAND, 2)),
+    ]
+
+
+def steady_running_steps() -> list[Step]:
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(6):
+        steps.append((f"demand_drain_{i}", 8.0,
+                      lambda s: s.apply_coil(Register.PUMP_COMMAND, 0)))
+        steps.append((f"pump_fill_{i}", 12.0,
+                      lambda s: s.apply_coil(Register.PUMP_COMMAND, 1)))
+    return steps
+
+
+NORMAL_SCENARIOS.update({
+    "startup_01": startup_steps,
+    "steady_running_01": steady_running_steps,
+})
