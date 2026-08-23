@@ -23,11 +23,12 @@ class WatchedBlock(ModbusSequentialDataBlock):
         self.on_change = on_change
 
     def setValues(self, address, values):  # noqa: N802 - pymodbus API name
-        super().setValues(address, values)
         if self.on_change is None:
+            super().setValues(address, values)
             return
         for offset, value in enumerate(values):
             self.on_change(address + offset, value)
+        super().setValues(address, values)
 
 
 class ModbusPlantServer:
@@ -62,12 +63,14 @@ class ModbusPlantServer:
             self.simulator.apply_coil(address, value)
         except ProtocolError:
             self.rejected_writes.append((address, value))
+            raise
 
     def _on_holding_write(self, address: int, value: int) -> None:
         try:
             self.simulator.apply_holding(address, value)
         except ProtocolError:
             self.rejected_writes.append((address, value))
+            raise
 
     def _tick(self) -> None:
         self.simulator.step(self.sim_step_seconds)
