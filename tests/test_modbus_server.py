@@ -16,6 +16,15 @@ def test_rejected_writes_are_recorded_not_raised_into_protocol():
     assert (int(Register.MODE_COMMAND), 9) in server.rejected_writes
 
 
+def test_cross_family_write_is_recorded_as_rejected():
+    sim = PlantSimulator()
+    server = ModbusPlantServer.__new__(ModbusPlantServer)
+    server.simulator = sim
+    server.rejected_writes = []
+    server._on_coil_write(int(Register.TARGET_LEVEL), 1)
+    assert (int(Register.TARGET_LEVEL), 1) in server.rejected_writes
+
+
 async def _round_trip() -> None:
     sim = PlantSimulator(seed=42)
     # Low multiplier keeps per-tick physics drift (~0.04 level counts) far

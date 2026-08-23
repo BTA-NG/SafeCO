@@ -19,6 +19,17 @@ class CommandRecord:
     kind: str
 
 
+def _resolve_target(mapping: dict, address: int, family: str) -> str:
+    try:
+        reg = Register(address)
+    except ValueError as exc:
+        raise ProtocolError(f"unknown {family} address {address}") from exc
+    target = mapping.get(reg)
+    if target is None:
+        raise ProtocolError(f"{reg.name} is not a {family} register")
+    return target
+
+
 COIL_TARGETS = {
     Register.PUMP_COMMAND: "pump",
     Register.INLET_VALVE_COMMAND: "inlet_valve",
@@ -49,10 +60,7 @@ class PlantSimulator:
         return record
 
     def apply_coil(self, address: int, value: int) -> CommandRecord:
-        try:
-            target = COIL_TARGETS[Register(address)]
-        except ValueError as exc:
-            raise ProtocolError(f"unknown coil address {address}") from exc
+        target = _resolve_target(COIL_TARGETS, address, "coil")
         on = bool(value)
         if target == "pump":
             self.state.pump_on = on
@@ -63,10 +71,7 @@ class PlantSimulator:
         return self._record(CommandRecord(address, target, int(on), "coil"))
 
     def apply_holding(self, address: int, value: int) -> CommandRecord:
-        try:
-            target = HOLDING_TARGETS[Register(address)]
-        except ValueError as exc:
-            raise ProtocolError(f"unknown holding address {address}") from exc
+        target = _resolve_target(HOLDING_TARGETS, address, "holding")
         if target == "mode":
             return self._record(self._apply_mode(value))
         if not 0 <= value <= 10_000:
@@ -89,10 +94,7 @@ class PlantSimulator:
         return CommandRecord(Register.MODE_COMMAND, "mode", raw, "holding")
 
     def read_coil(self, address: int) -> int:
-        try:
-            target = COIL_TARGETS[Register(address)]
-        except ValueError as exc:
-            raise ProtocolError(f"unknown coil address {address}") from exc
+        target = _resolve_target(COIL_TARGETS, address, "coil")
         states = {
             "pump": self.state.pump_on,
             "inlet_valve": self.state.inlet_valve_open,

@@ -103,3 +103,19 @@ def test_zero_noise_is_fully_deterministic():
         sim.apply_coil(Register.PUMP_COMMAND, 1)
         sim.step(5)
     assert a.read_input(Register.TANK_LEVEL) == b.read_input(Register.TANK_LEVEL)
+
+
+def test_cross_family_coil_write_is_protocol_error():
+    with pytest.raises(ProtocolError):
+        PlantSimulator().apply_coil(Register.TARGET_LEVEL, 1)
+
+
+def test_cross_family_holding_write_is_protocol_error():
+    with pytest.raises(ProtocolError):
+        PlantSimulator().apply_holding(Register.PUMP_COMMAND, 1)
+
+
+def test_read_cross_family_is_protocol_error():
+    sim = PlantSimulator()
+    with pytest.raises(ProtocolError):
+        sim.read_coil(Register.TANK_LEVEL)

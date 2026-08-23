@@ -78,7 +78,8 @@ def test_grid_recovery_is_benign_and_ends_on_generator_power():
     assert final["mode"] == "running"
 
 
-def test_scenarios_are_deterministic_from_seed():
-    a = run_scenario("grid_recovery_01", seed=42).snapshots
-    b = run_scenario("grid_recovery_01", seed=42).snapshots
+@pytest.mark.parametrize("scenario_id", sorted(NORMAL_SCENARIOS))
+def test_scenarios_are_deterministic_from_seed(scenario_id):
+    a = run_scenario(scenario_id, seed=42).snapshots
+    b = run_scenario(scenario_id, seed=42).snapshots
     assert a == b
