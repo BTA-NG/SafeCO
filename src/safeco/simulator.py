@@ -78,9 +78,15 @@ class PlantSimulator:
             self.state.high_level_limit = percent
         return self._record(CommandRecord(address, target, percent, "holding"))
 
-    # Completed in Task 2; stubbed here so the module imports.
     def _apply_mode(self, raw: int) -> CommandRecord:
-        raise NotImplementedError
+        try:
+            requested = OperatingMode(raw)
+        except ValueError as exc:
+            raise ProtocolError(f"unknown operating mode {raw}") from exc
+        if requested is OperatingMode.RECOVERY:
+            raise ProtocolError("recovery requires the grid-loss transfer sequence")
+        self.state.mode = requested
+        return CommandRecord(Register.MODE_COMMAND, "mode", raw, "holding")
 
     def read_coil(self, address: int) -> int:
         try:
@@ -95,10 +101,41 @@ class PlantSimulator:
         return int(states[target])
 
     def read_holding(self, address: int) -> int:
-        raise NotImplementedError  # Task 2
+        try:
+            reg = Register(address)
+        except ValueError as exc:
+            raise ProtocolError(f"unknown holding address {address}") from exc
+        match reg:
+            case Register.TARGET_LEVEL:
+                return round(self.state.target_level * 100)
+            case Register.HIGH_LEVEL_LIMIT:
+                return round(self.state.high_level_limit * 100)
+            case Register.MODE_COMMAND:
+                return int(self.state.mode)
+        raise ProtocolError(f"{reg.name} is not a holding register")
 
     def read_input(self, address: int) -> int:
-        raise NotImplementedError  # Task 2
+        try:
+            reg = Register(address)
+        except ValueError as exc:
+            raise ProtocolError(f"unknown input address {address}") from exc
+        noise = self.rng.gauss(0.0, self.noise_scale)
+        match reg:
+            case Register.TANK_LEVEL:
+                return round((self.state.tank_level + noise) * 100)
+            case Register.FLOW_RATE:
+                return round((self.state.flow_rate + noise) * 100)
+            case Register.PUMP_STATE:
+                return int(self.state.pump_on)
+            case Register.INLET_VALVE_STATE:
+                return int(self.state.inlet_valve_open)
+            case Register.OUTLET_VALVE_STATE:
+                return int(self.state.outlet_valve_open)
+            case Register.OPERATING_MODE:
+                return int(self.state.mode)
+            case Register.POWER_SOURCE:
+                return int(self.state.power_source)
+        raise ProtocolError(f"{reg.name} is not an input register")
 
     def step(self, seconds: float = 1.0) -> list[str]:
         """Advance physics deterministically; returns current invariant violations."""
