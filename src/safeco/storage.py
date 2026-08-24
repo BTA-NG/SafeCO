@@ -76,10 +76,32 @@ class EventStore:
         self.connection.commit()
         return event_hash
 
-    def list_events(self, limit: int = 100) -> list[sqlite3.Row]:
+    def list_events(
+        self, limit: int = 100, *, scenario_id: str | None = None
+    ) -> list[sqlite3.Row]:
+        """Return newest events, optionally restricted to one scenario."""
+        if scenario_id is None:
+            query = "SELECT * FROM events ORDER BY row_id DESC LIMIT ?"
+            params = (limit,)
+        else:
+            query = (
+                "SELECT * FROM events WHERE scenario_id = ? "
+                "ORDER BY row_id DESC LIMIT ?"
+            )
+            params = (scenario_id, limit)
+        return list(self.connection.execute(query, params))
+
+    def events_after(self, event_id: str, limit: int = 100) -> list[sqlite3.Row]:
+        """Return events after an acknowledged event in chronological order."""
+        row = self.connection.execute(
+            "SELECT row_id FROM events WHERE event_id = ?", (event_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown event_id {event_id!r}")
         return list(
             self.connection.execute(
-                "SELECT * FROM events ORDER BY row_id DESC LIMIT ?", (limit,)
+                "SELECT * FROM events WHERE row_id > ? ORDER BY row_id ASC LIMIT ?",
+                (row["row_id"], limit),
             )
         )
 
