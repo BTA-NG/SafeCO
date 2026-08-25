@@ -22,7 +22,7 @@ plant-control command.
 - Ruff lint/format rules and contributor workflow are documented in `AGENTS.md` and
   `CONTRIBUTING.md`.
 
-## Current evidence (24 August 2026)
+## Current evidence (25 August 2026)
 
 - `main` includes simulator, scenario, tooling, and backend integration PRs.
 - Latest merged integration commit: `80db5c1`.
@@ -31,22 +31,31 @@ plant-control command.
   SQLite hash chain.
 - Ruff check passes.
 - Ruff format check passes.
-- Repository suite currently reports 40 passing tests plus two live Modbus TCP tests
-  that cannot bind localhost in this restricted execution environment. Re-run those
-  tests on a normal developer laptop/CI and record the result here.
+- Maintenance, extended-normal, scenario fingerprint, and CLI tests passed in the
+  Phase 2 scenario PR review (27 relevant tests).
+- Two live Modbus TCP tests cannot bind localhost in this restricted execution
+  environment. Re-run those tests on a normal developer laptop/CI and record the
+  result here.
 
 ## Implemented scope
 
 - Plant state, register map, safety invariants, and deterministic physics.
-- Normal scenarios: startup, steady running, controlled shutdown, grid recovery.
-- Seed and generator-version recording for scenario reproducibility.
+- Normal scenarios: startup, steady running, controlled shutdown, grid recovery,
+  maintenance, and an extended normal run.
+- `maintenance_01`: labelled `maintenance`; enters maintenance mode, performs five
+  authorised +1% target-level changes and five restores, then returns to RUNNING
+  with no invariant violations.
+- `extended_normal_01`: approximately 969 simulated seconds of demand variation
+  plus a benign outlet-valve service cycle; tested level range remains bounded.
+- Seed, generator-version, ground-truth, and SHA-256 scenario-fingerprint recording
+  provide reproducibility evidence. The scenario CLI can print run metadata and a
+  fingerprint using `python -m safeco.scenarios <scenario> --seed 42 --fingerprint`.
 - Protocol validation, cross-register-family rejection, and rejected-write protection.
 - Event serialization, SQLite persistence, chain verification, and simulator integration.
 - Advisory-only response semantics.
 
 ## Remaining required work
 
-- Maintenance scenario and benign maintenance tests.
 - Four attack scenario runners: injection, replay, mistimed valid command, and gradual drift.
 - Hybrid detector: invariants, transition checks, replay/sequence, rate/drift, optional baseline.
 - Structured alert contract, evidence, severity, confidence, recommendation, and acknowledgement.
@@ -58,9 +67,10 @@ plant-control command.
 
 ## Evidence to capture next
 
-For each scenario, record: command to run, seed, generator version, event count,
-expected ground truth, alert result, detection latency, and a representative event/
-alert JSON pair. Keep tuning/validation/held-out scenario IDs separate.
+For each scenario, record: command to run, seed, generator version, fingerprint,
+event count, expected ground truth, alert result, detection latency, and a
+representative event/alert JSON pair. Keep tuning/validation/held-out scenario IDs
+separate.
 
 ## Final report outline
 
