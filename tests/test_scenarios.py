@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from safeco.plant import Register
@@ -10,6 +12,8 @@ from safeco.scenarios import (
     run_scenario,
     scenario_fingerprint,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _demo_steps() -> list[Step]:
@@ -161,7 +165,7 @@ def test_cli_fingerprint_matches():
         ],
         capture_output=True,
         text=True,
-        cwd="/home/cyberfreak/projects/SafeCO",
+        cwd=str(_REPO_ROOT),
         env={**__import__("os").environ, "PYTHONPATH": "src"},
     )
     data = json.loads(result.stdout)
@@ -176,7 +180,7 @@ def test_cli_unknown_name_exits_1():
     result = subprocess.run(
         [sys.executable, "-m", "safeco.scenarios", "nonexistent"],
         capture_output=True,
-        cwd="/home/cyberfreak/projects/SafeCO",
+        cwd=str(_REPO_ROOT),
         env={**__import__("os").environ, "PYTHONPATH": "src"},
     )
     assert result.returncode == 1
