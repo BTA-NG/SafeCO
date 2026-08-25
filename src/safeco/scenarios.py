@@ -1,3 +1,18 @@
+"""Deterministic scenario runner for the Adupe Municipal Water Station.
+
+Provides a registry of named normal-operation scenarios, each defined as
+a sequence of timed steps. Every scenario is fully reproducible from a
+seed: the same seed always produces the same command log and snapshot
+sequence. A SHA-256 fingerprint can be computed to prove reproducibility
+across separate runs.
+
+Usage::
+
+    from safeco.scenarios import run_scenario
+    result = run_scenario("startup_01", seed=42)
+    print(result.final_state)
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -11,16 +26,39 @@ from .plant import Register
 from .simulator import CommandRecord, PlantSimulator
 
 GENERATOR_VERSION = "safeco-scenarios/1.1"
+"""Version tag recorded in every ``ScenarioResult`` for dataset provenance."""
 
 GROUND_TRUTH: dict[str, str] = {
     "maintenance_01": "maintenance",
 }
+"""Override map for ground-truth labels.
+
+Scenarios not listed default to ``"normal"``.
+"""
 
 Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
+"""A single scenario step: ``(phase_name, duration_seconds, action_or_None)``."""
 
 
 @dataclass
 class ScenarioResult:
+    """Complete output of a deterministic scenario run.
+
+    Attributes:
+        scenario_id: Registry key of the scenario that was executed.
+        seed: Random seed used for this run.
+        generator_version: Provenance tag for the dataset.
+        ground_truth: Human-readable ground-truth label (e.g. ``"normal"``,
+            ``"maintenance"``).
+        commands: Every command applied to the simulator during the run,
+            in chronological order.
+        snapshots: One ``dict`` per step, containing plant state values
+            and the step's ``phase`` name.
+        violations: Per-step lists of invariant violations returned by
+            ``PlantSimulator.step``.
+
+    """
+
     scenario_id: str
     seed: int
     generator_version: str = GENERATOR_VERSION
@@ -31,10 +69,24 @@ class ScenarioResult:
 
     @property
     def final_state(self) -> dict:
+        """Return the snapshot from the last step of the scenario."""
         return self.snapshots[-1]
 
 
 def scenario_fingerprint(result: ScenarioResult) -> str:
+    """Compute a SHA-256 fingerprint proving seed-reproducibility.
+
+    The fingerprint is computed over a canonical JSON representation of
+    the result's metadata, commands, and snapshots. Two runs with the
+    same seed and generator version always produce the same fingerprint.
+
+    Args:
+        result: A completed ``ScenarioResult`` to fingerprint.
+
+    Returns:
+        Lowercase hex-encoded SHA-256 digest (64 characters).
+
+    """
     payload = {
         "scenario_id": result.scenario_id,
         "seed": result.seed,
@@ -49,6 +101,7 @@ def scenario_fingerprint(result: ScenarioResult) -> str:
 
 
 def _configure_running(sim: PlantSimulator) -> None:
+    """Configure the simulator into RUNNING mode with all valves and pump open."""
     sim.apply_coil(Register.INLET_VALVE_COMMAND, 1)
     sim.apply_coil(Register.OUTLET_VALVE_COMMAND, 1)
     sim.apply_coil(Register.PUMP_COMMAND, 1)
@@ -64,6 +117,21 @@ def _execute(
     on_command=None,
     on_snapshot=None,
 ) -> ScenarioResult:
+    """Execute a list of steps against a fresh simulator and collect results.
+
+    Args:
+        scenario_id: Registry key for this scenario run.
+        seed: Random seed forwarded to ``PlantSimulator``.
+        steps: Ordered list of ``(phase, seconds, action)`` tuples.
+        ground_truth: Ground-truth label for the resulting ``ScenarioResult``.
+        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_snapshot: Optional callback invoked with each snapshot dict.
+
+    Returns:
+        A populated ``ScenarioResult`` containing all commands, snapshots,
+        and per-step violations.
+
+    """
     sim = PlantSimulator(seed=seed)
     sim.on_command = on_command
     result = ScenarioResult(scenario_id, seed, ground_truth=ground_truth)
@@ -86,6 +154,21 @@ NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-
 def run_scenario(
     name: str, seed: int = 42, *, on_command=None, on_snapshot=None
 ) -> ScenarioResult:
+    """Run a named scenario from the ``NORMAL_SCENARIOS`` registry.
+
+    Args:
+        name: Scenario registry key (e.g. ``"startup_01"``).
+        seed: Random seed for reproducibility.
+        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_snapshot: Optional callback invoked with each snapshot dict.
+
+    Returns:
+        A populated ``ScenarioResult``.
+
+    Raises:
+        KeyError: If ``name`` is not found in the registry.
+
+    """
     if name not in NORMAL_SCENARIOS:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(NORMAL_SCENARIOS)}")
     return _execute(
@@ -99,6 +182,7 @@ def run_scenario(
 
 
 def startup_steps() -> list[Step]:
+    """Build the startup scenario: SHUTDOWN -> inlet open -> pump on -> RUNNING."""
     return [
         ("initial_shutdown", 1.0, None),
         ("open_inlet", 1.0, lambda s: s.apply_coil(Register.INLET_VALVE_COMMAND, 1)),
@@ -108,6 +192,7 @@ def startup_steps() -> list[Step]:
 
 
 def steady_running_steps() -> list[Step]:
+    """Build the steady-running scenario: 6 demand drain/fill duty cycles."""
     steps: list[Step] = [("configure_running", 1.0, _configure_running)]
     for i in range(6):
         steps.append(
@@ -120,6 +205,10 @@ def steady_running_steps() -> list[Step]:
 
 
 def controlled_shutdown_steps() -> list[Step]:
+    """Build the controlled-shutdown scenario.
+
+    Pump off -> inlet close -> demand drain -> SHUTDOWN.
+    """
     return [
         ("configure_running", 1.0, _configure_running),
         ("stop_pump", 2.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0)),
@@ -130,6 +219,13 @@ def controlled_shutdown_steps() -> list[Step]:
 
 
 def maintenance_steps() -> list[Step]:
+    """Build the maintenance scenario.
+
+    Authorised setpoint changes at a rate-limited cadence. Five +1%
+    TARGET_LEVEL raises (7000 -> 7500 raw) followed by five restore
+    steps, each at 5-second intervals. The slow cadence serves as the
+    benign contrast case for the drift attack in Phase 3.
+    """
     steps: list[Step] = [("configure_running", 1.0, _configure_running)]
     steps.append(
         ("enter_maintenance", 2.0, lambda s: s.apply_holding(Register.MODE_COMMAND, 3))
@@ -160,6 +256,13 @@ def maintenance_steps() -> list[Step]:
 
 
 def extended_normal_steps() -> list[Step]:
+    """Build the extended-normal scenario: ~16 minutes of demand variation.
+
+    Three repetitions of three demand blocks (A: 14s drain / 6s fill,
+    B: 8s / 8s, C: 18s / 10s), with a benign outlet-valve service
+    cycle inserted after the second repetition. Total duration ~969
+    simulated seconds, level bounded between 42% and 81%.
+    """
     steps: list[Step] = [("configure_running", 1.0, _configure_running)]
     for rep in range(3):
         for drain_s, fill_s in [
@@ -202,6 +305,8 @@ def extended_normal_steps() -> list[Step]:
 
 
 def grid_recovery_steps() -> list[Step]:
+    """Build the grid-recovery scenario: grid loss -> generator transfer -> RUNNING."""
+
     def restart(sim: PlantSimulator) -> None:
         sim.apply_coil(Register.PUMP_COMMAND, 1)
         sim.apply_holding(Register.MODE_COMMAND, 2)
@@ -233,6 +338,15 @@ NORMAL_SCENARIOS.update(
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Run a scenario from the command line and print JSON output.
+
+    Args:
+        argv: Argument list. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Raises:
+        SystemExit: With code 1 if the scenario name is unknown.
+
+    """
     parser = argparse.ArgumentParser(
         description="Run a deterministic SafeCO scenario",
     )

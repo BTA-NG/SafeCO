@@ -3,4 +3,10 @@ line-length = 88
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "B"]
+select = ["E", "F", "W", "I", "N", "B", "D"]
+ignore = ["D105", "D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/safeco/plant.py" = ["D"]
+"src/safeco/events.py" = ["D"]
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "D107"]
