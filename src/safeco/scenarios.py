@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from .plant import Register
 from .simulator import CommandRecord, PlantSimulator
 
-GENERATOR_VERSION = "safeco-scenarios/1.0"
+GENERATOR_VERSION = "safeco-scenarios/1.1"
+
+GROUND_TRUTH: dict[str, str] = {
+    "maintenance_01": "maintenance",
+}
 
 Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
 
@@ -16,6 +22,7 @@ class ScenarioResult:
     scenario_id: str
     seed: int
     generator_version: str = GENERATOR_VERSION
+    ground_truth: str = "normal"
     commands: list[CommandRecord] = field(default_factory=list)
     snapshots: list[dict] = field(default_factory=list)
     violations: list[list[str]] = field(default_factory=list)
@@ -23,6 +30,20 @@ class ScenarioResult:
     @property
     def final_state(self) -> dict:
         return self.snapshots[-1]
+
+
+def scenario_fingerprint(result: ScenarioResult) -> str:
+    payload = {
+        "scenario_id": result.scenario_id,
+        "seed": result.seed,
+        "generator_version": result.generator_version,
+        "ground_truth": result.ground_truth,
+        "commands": [asdict(c) for c in result.commands],
+        "snapshots": result.snapshots,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def _configure_running(sim: PlantSimulator) -> None:
@@ -33,11 +54,17 @@ def _configure_running(sim: PlantSimulator) -> None:
 
 
 def _execute(
-    scenario_id: str, seed: int, steps: list[Step], *, on_command=None, on_snapshot=None
+    scenario_id: str,
+    seed: int,
+    steps: list[Step],
+    *,
+    ground_truth: str = "normal",
+    on_command=None,
+    on_snapshot=None,
 ) -> ScenarioResult:
     sim = PlantSimulator(seed=seed)
     sim.on_command = on_command
-    result = ScenarioResult(scenario_id, seed)
+    result = ScenarioResult(scenario_id, seed, ground_truth=ground_truth)
     for phase, seconds, action in steps:
         if action is not None:
             action(sim)
@@ -63,6 +90,7 @@ def run_scenario(
         name,
         seed,
         NORMAL_SCENARIOS[name](),
+        ground_truth=GROUND_TRUTH.get(name, "normal"),
         on_command=on_command,
         on_snapshot=on_snapshot,
     )

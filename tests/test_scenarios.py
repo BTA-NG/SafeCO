@@ -7,6 +7,7 @@ from safeco.scenarios import (
     ScenarioResult,
     Step,
     run_scenario,
+    scenario_fingerprint,
 )
 
 
@@ -83,3 +84,20 @@ def test_scenarios_are_deterministic_from_seed(scenario_id):
     a = run_scenario(scenario_id, seed=42).snapshots
     b = run_scenario(scenario_id, seed=42).snapshots
     assert a == b
+
+
+def test_fingerprint_is_identical_across_runs():
+    a = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    b = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    assert a == b
+
+
+def test_fingerprint_differs_by_seed():
+    a = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    b = scenario_fingerprint(run_scenario("startup_01", seed=8))
+    assert a != b
+
+
+def test_ground_truth_defaults_to_normal():
+    result = run_scenario("startup_01", seed=42)
+    assert result.ground_truth == "normal"
