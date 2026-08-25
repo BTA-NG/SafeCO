@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
@@ -228,3 +230,38 @@ NORMAL_SCENARIOS.update(
         "extended_normal_01": extended_normal_steps,
     }
 )
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Run a deterministic SafeCO scenario",
+    )
+    parser.add_argument("name", help="scenario id (see NORMAL_SCENARIOS)")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--fingerprint", action="store_true")
+    args = parser.parse_args(argv)
+    if args.name not in NORMAL_SCENARIOS:
+        print(
+            f"error: unknown scenario {args.name!r}; "
+            f"known: {sorted(NORMAL_SCENARIOS)}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    steps_factory = NORMAL_SCENARIOS[args.name]
+    duration_s = sum(s for _, s, _ in steps_factory())
+    result = run_scenario(args.name, seed=args.seed)
+    output: dict = {
+        "scenario_id": result.scenario_id,
+        "seed": result.seed,
+        "ground_truth": result.ground_truth,
+        "command_count": len(result.commands),
+        "duration_s": duration_s,
+        "final_state": result.final_state,
+    }
+    if args.fingerprint:
+        output["fingerprint"] = scenario_fingerprint(result)
+    print(json.dumps(output, indent=2))
+
+
+if __name__ == "__main__":
+    main()

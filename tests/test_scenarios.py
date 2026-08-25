@@ -6,6 +6,7 @@ from safeco.scenarios import (
     NORMAL_SCENARIOS,
     ScenarioResult,
     Step,
+    main,
     run_scenario,
     scenario_fingerprint,
 )
@@ -124,8 +125,58 @@ def test_maintenance_target_restored_and_mode_path():
 def test_extended_normal_duration_and_bounds():
     steps = run_scenario("extended_normal_01", seed=42)
     from safeco.scenarios import extended_normal_steps
+
     total_s = sum(s for _, s, _ in extended_normal_steps())
     assert total_s >= 600
     levels = [s["tank_level"] for s in steps.snapshots]
     assert all(20.0 <= level <= 85.0 for level in levels)
     assert all(v == [] for v in steps.violations)
+
+
+def test_cli_runs_and_outputs_json(capsys):
+    main(["startup_01", "--seed", "7"])
+    import json
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["scenario_id"] == "startup_01"
+    assert output["seed"] == 7
+    assert output["command_count"] > 0
+    assert output["duration_s"] > 0
+
+
+def test_cli_fingerprint_matches():
+    import json
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "safeco.scenarios",
+            "startup_01",
+            "--seed",
+            "42",
+            "--fingerprint",
+        ],
+        capture_output=True,
+        text=True,
+        cwd="/home/cyberfreak/projects/SafeCO",
+        env={**__import__("os").environ, "PYTHONPATH": "src"},
+    )
+    data = json.loads(result.stdout)
+    expected = scenario_fingerprint(run_scenario("startup_01", seed=42))
+    assert data["fingerprint"] == expected
+
+
+def test_cli_unknown_name_exits_1():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "safeco.scenarios", "nonexistent"],
+        capture_output=True,
+        cwd="/home/cyberfreak/projects/SafeCO",
+        env={**__import__("os").environ, "PYTHONPATH": "src"},
+    )
+    assert result.returncode == 1
