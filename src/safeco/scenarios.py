@@ -242,8 +242,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.name not in NORMAL_SCENARIOS:
         print(
-            f"error: unknown scenario {args.name!r}; "
-            f"known: {sorted(NORMAL_SCENARIOS)}",
+            f"error: unknown scenario {args.name!r}; known: {sorted(NORMAL_SCENARIOS)}",
             file=sys.stderr,
         )
         raise SystemExit(1)
