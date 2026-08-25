@@ -1,3 +1,9 @@
+"""Event collector bridging the plant simulator to the persisted event store.
+
+Translates ``PlantState`` snapshots and ``CommandRecord`` results into
+the shared ``Event`` contract and appends them to an ``EventStore``.
+"""
+
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -17,6 +23,14 @@ class EventCollector:
     def __init__(
         self, store: EventStore, scenario_id: str, seed: int | None = None
     ) -> None:
+        """Initialise the collector with a store and scenario context.
+
+        Args:
+            store: The ``EventStore`` to persist events to.
+            scenario_id: Registry key for the running scenario.
+            seed: Optional RNG seed, stored in every event's ``raw`` metadata.
+
+        """
         self.store = store
         self.scenario_id = scenario_id
         self.seed = seed
@@ -33,6 +47,21 @@ class EventCollector:
         ground_truth: str = "normal",
         raw: dict[str, Any] | None = None,
     ) -> Event:
+        """Build an ``Event`` from the current plant state and append it to the store.
+
+        Args:
+            plant: Current ``PlantState`` snapshot.
+            source: Event originator (e.g. ``"scheduler"``).
+            command: Command name (e.g. ``"write_coil"``).
+            target: Target register name.
+            value: Optional value written.
+            ground_truth: Ground-truth label for this event.
+            raw: Optional extra metadata merged into the event's ``raw`` dict.
+
+        Returns:
+            The persisted ``Event`` with its assigned ``event_id``.
+
+        """
         self.sequence_id += 1
         snapshot = ProcessSnapshot(
             tank_level=plant.tank_level,

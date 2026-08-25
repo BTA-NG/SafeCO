@@ -1,3 +1,9 @@
+"""Sample integration runner for SafeCO.
+
+Provides deterministic demo workflows that wire the simulator, collector,
+and storage together, plus a CLI entry point for quick validation.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -67,6 +73,12 @@ def run_simulator_sample(
 
 
 def main() -> int:
+    """Parse CLI arguments and run the sample integration workflow.
+
+    Returns:
+        Exit code — ``0`` if the hash chain is valid, ``1`` otherwise.
+
+    """
     parser = argparse.ArgumentParser(description="Run a deterministic SafeCO sample")
     parser.add_argument("--database", default="data/safeco.db")
     parser.add_argument("--seed", type=int, default=42)

@@ -1,3 +1,9 @@
+"""SQLite event store with a tamper-evident SHA-256 hash chain.
+
+Every appended event is linked to the previous event's hash, forming
+an append-only chain that can be verified for integrity.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -35,6 +41,13 @@ class EventStore:
     """SQLite event store with a tamper-evident hash chain."""
 
     def __init__(self, database: str | Path = "data/safeco.db") -> None:
+        """Open (or create) the SQLite database and ensure the schema exists.
+
+        Args:
+            database: Filesystem path for the database file. Parent
+                directories are created automatically.
+
+        """
         self.database = Path(database)
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(self.database)
@@ -44,6 +57,15 @@ class EventStore:
         self.connection.commit()
 
     def append(self, event: Event) -> str:
+        """Append an event to the store and return its computed hash.
+
+        Args:
+            event: The ``Event`` to persist.
+
+        Returns:
+            The SHA-256 hash of the appended event.
+
+        """
         previous = self.connection.execute(
             "SELECT event_hash FROM events ORDER BY row_id DESC LIMIT 1"
         ).fetchone()
@@ -106,6 +128,13 @@ class EventStore:
         )
 
     def verify_chain(self) -> tuple[bool, str | None]:
+        """Walk the hash chain from the first event and verify every link.
+
+        Returns:
+            ``(True, None)`` if the full chain is valid, or
+            ``(False, event_id)`` at the first broken link.
+
+        """
         previous_hash = "0" * 64
         rows: Iterable[sqlite3.Row] = self.connection.execute(
             "SELECT * FROM events ORDER BY row_id ASC"
@@ -137,4 +166,5 @@ class EventStore:
         return True, None
 
     def close(self) -> None:
+        """Close the underlying SQLite connection."""
         self.connection.close()
