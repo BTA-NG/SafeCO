@@ -119,3 +119,13 @@ def test_maintenance_target_restored_and_mode_path():
     phase_modes = [(s["phase"], s["mode"]) for s in result.snapshots]
     mid = [m for ph, m in phase_modes if ph == "enter_maintenance"]
     assert mid == ["maintenance"]
+
+
+def test_extended_normal_duration_and_bounds():
+    steps = run_scenario("extended_normal_01", seed=42)
+    from safeco.scenarios import extended_normal_steps
+    total_s = sum(s for _, s, _ in extended_normal_steps())
+    assert total_s >= 600
+    levels = [s["tank_level"] for s in steps.snapshots]
+    assert all(20.0 <= level <= 85.0 for level in levels)
+    assert all(v == [] for v in steps.violations)

@@ -157,6 +157,48 @@ def maintenance_steps() -> list[Step]:
     return steps
 
 
+def extended_normal_steps() -> list[Step]:
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for rep in range(3):
+        for drain_s, fill_s in [
+            (14.0, 6.0),
+            (8.0, 8.0),
+            (18.0, 10.0),
+        ]:
+            for i in range(5):
+                tag = f"{rep}_{int(drain_s)}_{i}"
+                steps.append(
+                    (
+                        f"drain_{tag}",
+                        drain_s,
+                        lambda s: s.apply_coil(Register.PUMP_COMMAND, 0),
+                    )
+                )
+                steps.append(
+                    (
+                        f"fill_{tag}",
+                        fill_s,
+                        lambda s: s.apply_coil(Register.PUMP_COMMAND, 1),
+                    )
+                )
+        if rep == 1:
+            steps.append(
+                (
+                    "outlet_service_close",
+                    4.0,
+                    lambda s: s.apply_coil(Register.OUTLET_VALVE_COMMAND, 0),
+                )
+            )
+            steps.append(
+                (
+                    "outlet_service_reopen",
+                    4.0,
+                    lambda s: s.apply_coil(Register.OUTLET_VALVE_COMMAND, 1),
+                )
+            )
+    return steps
+
+
 def grid_recovery_steps() -> list[Step]:
     def restart(sim: PlantSimulator) -> None:
         sim.apply_coil(Register.PUMP_COMMAND, 1)
@@ -183,5 +225,6 @@ NORMAL_SCENARIOS.update(
         "controlled_shutdown_01": controlled_shutdown_steps,
         "grid_recovery_01": grid_recovery_steps,
         "maintenance_01": maintenance_steps,
+        "extended_normal_01": extended_normal_steps,
     }
 )
