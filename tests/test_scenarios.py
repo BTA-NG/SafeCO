@@ -101,3 +101,21 @@ def test_fingerprint_differs_by_seed():
 def test_ground_truth_defaults_to_normal():
     result = run_scenario("startup_01", seed=42)
     assert result.ground_truth == "normal"
+
+
+def test_maintenance_labelled_and_benign():
+    result = run_scenario("maintenance_01", seed=42)
+    assert result.ground_truth == "maintenance"
+    assert all(v == [] for v in result.violations)
+
+
+def test_maintenance_target_restored_and_mode_path():
+    result = run_scenario("maintenance_01", seed=42)
+    levels = [s["tank_level"] for s in result.snapshots]
+    assert levels[-1] < 90.0
+    final = result.final_state
+    assert final["target_level"] == 70.0
+    assert final["mode"] == "running"
+    phase_modes = [(s["phase"], s["mode"]) for s in result.snapshots]
+    mid = [m for ph, m in phase_modes if ph == "enter_maintenance"]
+    assert mid == ["maintenance"]

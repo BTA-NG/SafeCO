@@ -127,6 +127,36 @@ def controlled_shutdown_steps() -> list[Step]:
     ]
 
 
+def maintenance_steps() -> list[Step]:
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    steps.append(
+        ("enter_maintenance", 2.0, lambda s: s.apply_holding(Register.MODE_COMMAND, 3))
+    )
+    for i in range(1, 6):
+        target = 7000 + i * 100
+        steps.append(
+            (
+                f"raise_target_{i}",
+                5.0,
+                lambda s, t=target: s.apply_holding(Register.TARGET_LEVEL, t),
+            )
+        )
+    for i in range(1, 6):
+        target = 7500 - i * 100
+        steps.append(
+            (
+                f"restore_target_{i}",
+                5.0,
+                lambda s, t=target: s.apply_holding(Register.TARGET_LEVEL, t),
+            )
+        )
+    steps.append(
+        ("exit_maintenance", 2.0, lambda s: s.apply_holding(Register.MODE_COMMAND, 2))
+    )
+    steps.append(("settle_running", 2.0, None))
+    return steps
+
+
 def grid_recovery_steps() -> list[Step]:
     def restart(sim: PlantSimulator) -> None:
         sim.apply_coil(Register.PUMP_COMMAND, 1)
@@ -152,5 +182,6 @@ NORMAL_SCENARIOS.update(
     {
         "controlled_shutdown_01": controlled_shutdown_steps,
         "grid_recovery_01": grid_recovery_steps,
+        "maintenance_01": maintenance_steps,
     }
 )
