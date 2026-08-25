@@ -51,6 +51,12 @@ Run any scenario with a fixed seed:
 | steady_running_01 | normal | 121 s pump duty cycle; level stays below high-level limit throughout |
 | controlled_shutdown_01 | normal | pump off -> inlet closed -> demand drain -> SHUTDOWN; no violations |
 | grid_recovery_01 | normal | grid loss -> pump stop -> RECOVERY -> generator transfer -> STARTUP -> RUNNING on GENERATOR; benign |
+| maintenance_01 | maintenance | RUNNING -> MAINTENANCE -> five +1% target raises -> five restores -> RUNNING; slow rate-limited cadence; no violations |
+| extended_normal_01 | normal | 969 s duty cycle with A/B/C demand blocks and a benign outlet service cycle; level bounded [42, 81] |
+
+One-command runner:
+
+    PYTHONPATH=src python -m safeco.scenarios startup_01 --seed 42 --fingerprint
 
 Snapshots carry a `phase` key matching the step names above. Every applied command is
 available via `result.commands` / the simulator's `on_command` callback for downstream

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from safeco.plant import Register
@@ -6,8 +8,12 @@ from safeco.scenarios import (
     NORMAL_SCENARIOS,
     ScenarioResult,
     Step,
+    main,
     run_scenario,
+    scenario_fingerprint,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _demo_steps() -> list[Step]:
@@ -83,3 +89,98 @@ def test_scenarios_are_deterministic_from_seed(scenario_id):
     a = run_scenario(scenario_id, seed=42).snapshots
     b = run_scenario(scenario_id, seed=42).snapshots
     assert a == b
+
+
+def test_fingerprint_is_identical_across_runs():
+    a = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    b = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    assert a == b
+
+
+def test_fingerprint_differs_by_seed():
+    a = scenario_fingerprint(run_scenario("startup_01", seed=7))
+    b = scenario_fingerprint(run_scenario("startup_01", seed=8))
+    assert a != b
+
+
+def test_ground_truth_defaults_to_normal():
+    result = run_scenario("startup_01", seed=42)
+    assert result.ground_truth == "normal"
+
+
+def test_maintenance_labelled_and_benign():
+    result = run_scenario("maintenance_01", seed=42)
+    assert result.ground_truth == "maintenance"
+    assert all(v == [] for v in result.violations)
+
+
+def test_maintenance_target_restored_and_mode_path():
+    result = run_scenario("maintenance_01", seed=42)
+    levels = [s["tank_level"] for s in result.snapshots]
+    assert levels[-1] < 90.0
+    final = result.final_state
+    assert final["target_level"] == 70.0
+    assert final["mode"] == "running"
+    phase_modes = [(s["phase"], s["mode"]) for s in result.snapshots]
+    mid = [m for ph, m in phase_modes if ph == "enter_maintenance"]
+    assert mid == ["maintenance"]
+
+
+def test_extended_normal_duration_and_bounds():
+    steps = run_scenario("extended_normal_01", seed=42)
+    from safeco.scenarios import extended_normal_steps
+
+    total_s = sum(s for _, s, _ in extended_normal_steps())
+    assert total_s >= 600
+    levels = [s["tank_level"] for s in steps.snapshots]
+    assert all(20.0 <= level <= 85.0 for level in levels)
+    assert all(v == [] for v in steps.violations)
+
+
+def test_cli_runs_and_outputs_json(capsys):
+    main(["startup_01", "--seed", "7"])
+    import json
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["scenario_id"] == "startup_01"
+    assert output["seed"] == 7
+    assert output["command_count"] > 0
+    assert output["duration_s"] > 0
+
+
+def test_cli_fingerprint_matches():
+    import json
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "safeco.scenarios",
+            "startup_01",
+            "--seed",
+            "42",
+            "--fingerprint",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(_REPO_ROOT),
+        env={**__import__("os").environ, "PYTHONPATH": "src"},
+    )
+    data = json.loads(result.stdout)
+    expected = scenario_fingerprint(run_scenario("startup_01", seed=42))
+    assert data["fingerprint"] == expected
+
+
+def test_cli_unknown_name_exits_1():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "safeco.scenarios", "nonexistent"],
+        capture_output=True,
+        cwd=str(_REPO_ROOT),
+        env={**__import__("os").environ, "PYTHONPATH": "src"},
+    )
+    assert result.returncode == 1
