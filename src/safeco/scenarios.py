@@ -22,7 +22,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
-from .plant import Register
+from .plant import OperatingMode, Register
 from .simulator import CommandRecord, PlantSimulator
 
 GENERATOR_VERSION = "safeco-scenarios/1.1"
@@ -30,6 +30,10 @@ GENERATOR_VERSION = "safeco-scenarios/1.1"
 
 GROUND_TRUTH: dict[str, str] = {
     "maintenance_01": "maintenance",
+    "attack_injection_01": "injection",
+    "attack_replay_01": "replay",
+    "attack_mistimed_01": "mistimed",
+    "attack_drift_01": "drift",
 }
 """Override map for ground-truth labels.
 
@@ -149,6 +153,8 @@ def _execute(
 
 
 NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
+ATTACK_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}
+"""Deterministic attack scenario registry kept separate from benign data."""
 
 
 def run_scenario(
@@ -169,12 +175,13 @@ def run_scenario(
         KeyError: If ``name`` is not found in the registry.
 
     """
-    if name not in NORMAL_SCENARIOS:
-        raise KeyError(f"unknown scenario {name!r}; known: {sorted(NORMAL_SCENARIOS)}")
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    if name not in scenarios:
+        raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
     return _execute(
         name,
         seed,
-        NORMAL_SCENARIOS[name](),
+        scenarios[name](),
         ground_truth=GROUND_TRUTH.get(name, "normal"),
         on_command=on_command,
         on_snapshot=on_snapshot,
@@ -320,6 +327,64 @@ def grid_recovery_steps() -> list[Step]:
     ]
 
 
+def attack_injection_steps() -> list[Step]:
+    """Build command-injection attack: pump started with inlet path closed."""
+    return [
+        ("initial_shutdown", 1.0, None),
+        (
+            "attacker_start_pump_closed_inlet",
+            2.0,
+            lambda s: s.apply_coil(Register.PUMP_COMMAND, 1),
+        ),
+    ]
+
+
+def attack_replay_steps() -> list[Step]:
+    """Build replay attack: old pump-start repeated after context changed."""
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("normal_stop_pump", 2.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0)),
+        (
+            "close_inlet_for_service",
+            2.0,
+            lambda s: s.apply_coil(Register.INLET_VALVE_COMMAND, 0),
+        ),
+        (
+            "attacker_replay_start_pump",
+            2.0,
+            lambda s: s.apply_coil(Register.PUMP_COMMAND, 1),
+        ),
+    ]
+
+
+def attack_mistimed_steps() -> list[Step]:
+    """Build mistimed command attack: plant resumes before power restoration."""
+
+    def unsafe_resume(sim: PlantSimulator) -> None:
+        sim.state.mode = OperatingMode.STARTUP
+
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("grid_loss", 2.0, lambda s: s.state.begin_grid_recovery()),
+        ("attacker_force_startup_without_power", 2.0, unsafe_resume),
+    ]
+
+
+def attack_drift_steps() -> list[Step]:
+    """Build slow setpoint drift attack outside maintenance mode."""
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(1, 7):
+        target = 7000 + i * 100
+        steps.append(
+            (
+                f"attacker_raise_target_{i}",
+                3.0,
+                lambda s, t=target: s.apply_holding(Register.TARGET_LEVEL, t),
+            )
+        )
+    return steps
+
+
 NORMAL_SCENARIOS.update(
     {
         "startup_01": startup_steps,
@@ -333,6 +398,15 @@ NORMAL_SCENARIOS.update(
         "grid_recovery_01": grid_recovery_steps,
         "maintenance_01": maintenance_steps,
         "extended_normal_01": extended_normal_steps,
+    }
+)
+
+ATTACK_SCENARIOS.update(
+    {
+        "attack_injection_01": attack_injection_steps,
+        "attack_replay_01": attack_replay_steps,
+        "attack_mistimed_01": attack_mistimed_steps,
+        "attack_drift_01": attack_drift_steps,
     }
 )
 
@@ -354,13 +428,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fingerprint", action="store_true")
     args = parser.parse_args(argv)
-    if args.name not in NORMAL_SCENARIOS:
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    if args.name not in scenarios:
         print(
-            f"error: unknown scenario {args.name!r}; known: {sorted(NORMAL_SCENARIOS)}",
+            f"error: unknown scenario {args.name!r}; known: {sorted(scenarios)}",
             file=sys.stderr,
         )
         raise SystemExit(1)
-    steps_factory = NORMAL_SCENARIOS[args.name]
+    steps_factory = scenarios[args.name]
     duration_s = sum(s for _, s, _ in steps_factory())
     result = run_scenario(args.name, seed=args.seed)
     output: dict = {
