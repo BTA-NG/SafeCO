@@ -1,18 +1,25 @@
 import pytest
 
 from safeco.alerts import SEVERITY_RANK, ReasonCode, Severity
-from safeco.collector import plant_snapshot
+from safeco.collector import EventCollector, plant_snapshot
 from safeco.detector import (
     LEGAL_TRANSITIONS,
-    check_rate_and_drift,
     check_invariants,
+    check_rate_and_drift,
     check_replay,
     check_transitions,
     detect,
 )
 from safeco.events import Event, ProcessSnapshot
 from safeco.plant import OperatingMode, PlantState, PowerSource
-from safeco.scenarios import NORMAL_SCENARIOS, run_scenario
+from safeco.scenarios import (
+    ATTACK_SCENARIOS,
+    GROUND_TRUTH,
+    NORMAL_SCENARIOS,
+    run_scenario,
+)
+from safeco.simulator import PlantSimulator
+from safeco.storage import EventStore
 
 BENIGN_SCENARIOS = sorted(NORMAL_SCENARIOS)
 
@@ -222,7 +229,8 @@ def test_unknown_power_after_recovery_reports_insufficient_context():
 
 def test_illegal_mode_transition_is_flagged():
     history = [_event(mode="shutdown", pump_state="off")]
-    alerts = detect(_event(mode="maintenance", pump_state="off"), history)
+    event = _event(mode="maintenance", pump_state="off", sequence_id=2)
+    alerts = detect(event, history)
     assert _codes(alerts) == {ReasonCode.ILLEGAL_MODE_TRANSITION}
     alert = alerts[0]
     assert alert.severity is Severity.HIGH
@@ -343,10 +351,7 @@ def test_immediate_repeated_command_in_same_context_is_not_replay():
 
 
 def test_command_rate_spike_is_flagged_for_repeated_actuator_writes():
-    history = [
-        _event(sequence_id=i, target="pump", value=i % 2)
-        for i in range(1, 7)
-    ]
+    history = [_event(sequence_id=i, target="pump", value=i % 2) for i in range(1, 7)]
     event = _event(sequence_id=7, target="pump", value=1)
     alerts = check_rate_and_drift(event, history)
     assert _codes(alerts) == {ReasonCode.COMMAND_RATE_SPIKE}
@@ -399,6 +404,93 @@ def test_maintenance_setpoint_changes_are_not_drift_alerts():
         ground_truth="maintenance",
     )
     assert check_rate_and_drift(event, history) == []
+
+
+def test_maintenance_history_does_not_leak_into_running_drift_check():
+    history = [
+        _event(
+            mode="maintenance",
+            sequence_id=i,
+            command="write_holding",
+            target="level_setpoint",
+            value=70.0 + i,
+            target_level=70.0 + i,
+            ground_truth="maintenance",
+        )
+        for i in range(1, 6)
+    ]
+    history.append(
+        _event(
+            mode="running",
+            sequence_id=6,
+            command="write_holding",
+            target="level_setpoint",
+            value=70.0,
+            target_level=70.0,
+        )
+    )
+    event = _event(
+        mode="running",
+        sequence_id=7,
+        command="write_holding",
+        target="level_setpoint",
+        value=71.0,
+        target_level=71.0,
+    )
+
+    assert ReasonCode.SETPOINT_DRIFT not in _codes(check_rate_and_drift(event, history))
+
+
+# --- End-to-end attack traces --------------------------------------------
+
+
+def test_each_attack_scenario_persists_labelled_events_and_expected_alerts(tmp_path):
+    expected = {
+        "attack_injection_01": ReasonCode.UNSAFE_PUMP_START,
+        "attack_replay_01": ReasonCode.COMMAND_REPLAY,
+        "attack_mistimed_01": ReasonCode.RECOVERY_OUT_OF_SEQUENCE,
+        "attack_drift_01": ReasonCode.SETPOINT_DRIFT,
+    }
+
+    for scenario_id, reason_code in expected.items():
+        database = tmp_path / f"{scenario_id}.db"
+        store = EventStore(database)
+        collector = EventCollector(store, scenario_id, seed=42)
+        events: list[Event] = []
+        alerts = []
+        ground_truth = GROUND_TRUTH[scenario_id]
+        simulator = PlantSimulator(seed=42)
+
+        def collect(
+            command,
+            *,
+            alerts=alerts,
+            collector=collector,
+            events=events,
+            ground_truth=ground_truth,
+            simulator=simulator,
+        ) -> None:
+            event = collector.record_simulator_command(
+                simulator,
+                command,
+                source="attacker",
+                ground_truth=ground_truth,
+            )
+            alerts.extend(detect(event, events))
+            events.append(event)
+
+        simulator.on_command = collect
+        for _, seconds, action in ATTACK_SCENARIOS[scenario_id]():
+            if action is not None:
+                action(simulator)
+            simulator.step(seconds)
+
+        rows = store.list_events(limit=100, scenario_id=scenario_id)
+        assert rows
+        assert {row["ground_truth"] for row in rows} == {ground_truth}
+        assert reason_code in {alert.reason_code for alert in alerts}
+        assert store.verify_chain() == (True, None)
+        store.close()
 
 
 # --- Contract and composition guarantees ---------------------------------

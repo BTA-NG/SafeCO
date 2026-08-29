@@ -131,7 +131,7 @@ def test_attack_scenarios_are_separate_from_benign_registry():
 def test_attack_scenarios_run_with_expected_ground_truth(scenario_id, ground_truth):
     result = run_scenario(scenario_id, seed=42)
     assert result.ground_truth == ground_truth
-    assert result.commands or scenario_id == "attack_mistimed_01"
+    assert result.commands
     assert result.snapshots[-1]["phase"].startswith(("attacker", "attack"))
 
 

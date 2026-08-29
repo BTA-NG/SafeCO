@@ -22,7 +22,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
-from .plant import OperatingMode, Register
+from .plant import OperatingMode, PowerSource, Register
 from .simulator import CommandRecord, PlantSimulator
 
 GENERATOR_VERSION = "safeco-scenarios/1.1"
@@ -360,13 +360,19 @@ def attack_replay_steps() -> list[Step]:
 def attack_mistimed_steps() -> list[Step]:
     """Build mistimed command attack: plant resumes before power restoration."""
 
-    def unsafe_resume(sim: PlantSimulator) -> None:
-        sim.state.mode = OperatingMode.STARTUP
+    def force_recovery_without_power(sim: PlantSimulator) -> None:
+        sim.apply_coil(Register.PUMP_COMMAND, 0)
+        sim.state.power_source = PowerSource.OFF
+        sim.force_mode_command(int(OperatingMode.RECOVERY))
 
     return [
         ("configure_running", 1.0, _configure_running),
-        ("grid_loss", 2.0, lambda s: s.state.begin_grid_recovery()),
-        ("attacker_force_startup_without_power", 2.0, unsafe_resume),
+        ("force_recovery_without_power", 2.0, force_recovery_without_power),
+        (
+            "attacker_force_startup_without_power",
+            2.0,
+            lambda s: s.force_mode_command(int(OperatingMode.STARTUP)),
+        ),
     ]
 
 

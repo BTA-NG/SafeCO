@@ -198,6 +198,33 @@ class PlantSimulator:
         self.state.mode = requested
         return CommandRecord(Register.MODE_COMMAND, "mode", raw, "holding")
 
+    def force_mode_command(self, raw: int) -> CommandRecord:
+        """Record and apply an unsafe mode command for attack scenarios.
+
+        Normal Modbus writes cannot enter RECOVERY directly and should keep
+        using ``apply_holding``. This method is a deliberate attack-fixture
+        interface for commands that bypass normal sequencing while still
+        producing a ``CommandRecord`` and invoking ``on_command``.
+
+        Args:
+            raw: Raw integer mode value from the holding register.
+
+        Returns:
+            A ``CommandRecord`` describing the forced mode change.
+
+        Raises:
+            ProtocolError: If ``raw`` is not a valid ``OperatingMode``.
+
+        """
+        try:
+            requested = OperatingMode(raw)
+        except ValueError as exc:
+            raise ProtocolError(f"unknown operating mode {raw}") from exc
+        self.state.mode = requested
+        return self._record(
+            CommandRecord(Register.MODE_COMMAND, "mode", raw, "holding")
+        )
+
     def read_coil(self, address: int) -> int:
         """Read the current value of a coil register.
 

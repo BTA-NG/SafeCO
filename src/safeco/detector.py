@@ -518,13 +518,16 @@ def check_rate_and_drift(event: Event, history: Sequence[Event] = ()) -> list[Al
     values = [
         value
         for candidate in drift_window
+        if candidate.mode == event.mode
         if candidate.target == event.target
         for value in [_setpoint_value(candidate)]
         if value is not None
     ]
     if len(values) >= 3:
         delta = values[-1] - values[0]
-        monotonic_up = all(after >= before for before, after in zip(values, values[1:]))
+        monotonic_up = all(
+            after >= before for before, after in zip(values, values[1:], strict=False)
+        )
         if monotonic_up and delta > SETPOINT_DRIFT_LIMIT_PERCENT:
             alerts.append(
                 build_alert(
