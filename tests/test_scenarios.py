@@ -4,6 +4,7 @@ import pytest
 
 from safeco.plant import Register
 from safeco.scenarios import (
+    ATTACK_SCENARIOS,
     GENERATOR_VERSION,
     NORMAL_SCENARIOS,
     ScenarioResult,
@@ -106,6 +107,32 @@ def test_fingerprint_differs_by_seed():
 def test_ground_truth_defaults_to_normal():
     result = run_scenario("startup_01", seed=42)
     assert result.ground_truth == "normal"
+
+
+def test_attack_scenarios_are_separate_from_benign_registry():
+    assert set(ATTACK_SCENARIOS) == {
+        "attack_injection_01",
+        "attack_replay_01",
+        "attack_mistimed_01",
+        "attack_drift_01",
+    }
+    assert set(ATTACK_SCENARIOS).isdisjoint(NORMAL_SCENARIOS)
+
+
+@pytest.mark.parametrize(
+    ("scenario_id", "ground_truth"),
+    [
+        ("attack_injection_01", "injection"),
+        ("attack_replay_01", "replay"),
+        ("attack_mistimed_01", "mistimed"),
+        ("attack_drift_01", "drift"),
+    ],
+)
+def test_attack_scenarios_run_with_expected_ground_truth(scenario_id, ground_truth):
+    result = run_scenario(scenario_id, seed=42)
+    assert result.ground_truth == ground_truth
+    assert result.commands
+    assert result.snapshots[-1]["phase"].startswith(("attacker", "attack"))
 
 
 def test_maintenance_labelled_and_benign():
