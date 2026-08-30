@@ -54,7 +54,7 @@ Joseph implements in order: invariant rules, replay checks, rate/drift checks, t
 
 Ebi builds against the shared event and alert contracts; do not invent dashboard-only state. First handoff: a local page displays tank level, pump, inlet/outlet valves, power source, operating mode, recent events, and an alert placeholder using backend data. The dashboard must continue locally without internet and clearly indicate degraded visibility if the local control feed is lost.
 
-Ebi's alert presentation must answer what happened, affected equipment, current context, why it matters, confidence, evidence, and recommended human action. SafeCO is advisory; the interface must never imply that it automatically stopped equipment.
+Ebi's alert presentation must answer what happened, affected equipment, current context, why it matters, confidence, evidence, and recommended human action. Ebi may add an explicitly engineer-confirmed simulator action after acknowledgement. The UI must identify the operator, alert, exact command, timestamp, and resulting state, and must never imply that SafeCO acted automatically.
 
 ## Accuracy rules
 
@@ -64,6 +64,8 @@ Ebi's alert presentation must answer what happened, affected equipment, current 
 - The hash chain detects later modification of stored events; it does not prove that the original sensor reading was truthful.
 - A closed flow path is described as dangerous only where the documented plant topology and implemented invariant support that claim.
 - The simulator may apply an unsafe but protocol-valid command for demonstration. SafeCO observes, explains, and advises; a human decides.
+- SafeCO may support an explicitly confirmed simulator action. There is no timeout,
+  autonomous fallback, or unreviewed plant-changing command.
 - Never tune or test on the same complete scenarios, and never hide missed attacks or false positives.
 
 ## Interfaces that must not drift
