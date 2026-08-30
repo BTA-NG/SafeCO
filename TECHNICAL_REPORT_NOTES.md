@@ -11,6 +11,10 @@ unsafe in the current process context, preserves evidence, and advises an engine
 It never independently blocks, reverses, delays, or issues a consequential
 plant-control command.
 
+SafeCO may support a simulator-only action explicitly confirmed by an engineer.
+That action records the operator, alert, exact command, timestamp, and resulting
+state; it is distinct from autonomous response and is not a real-plant control path.
+
 ## Architecture proof points
 
 - Frozen plant/register contract: `src/safeco/plant.py`, `docs/plant_contract.md`.
@@ -53,6 +57,8 @@ plant-control command.
 - Protocol validation, cross-register-family rejection, and rejected-write protection.
 - Event serialization, SQLite persistence, chain verification, and simulator integration.
 - Advisory-only response semantics.
+- Human-confirmed simulator actions are an optional response demonstration; no
+  timeout or autonomous fallback is permitted.
 
 ## Remaining required work
 
@@ -60,6 +66,7 @@ plant-control command.
 - Hybrid detector: invariants, transition checks, replay/sequence, rate/drift, optional baseline.
 - Structured alert contract, evidence, severity, confidence, recommendation, and acknowledgement.
 - FastAPI endpoints and local dashboard.
+- Optional confirmed simulator action with operator and command audit fields.
 - Offline collection/reconnect catch-up and degraded-visibility state.
 - Held-out evaluation with precision, recall, false alerts per normal hour, latency,
   confusion matrix, missed attacks, and maintenance false positives.

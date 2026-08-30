@@ -16,7 +16,7 @@ Non-goals: real industrial equipment, production safety certification, autonomou
 
 ## System context
 
-Attack and normal scripts feed a Modbus TCP simulator. The simulator feeds a collector and SQLite event store. A layered rules and baseline detector feeds a FastAPI service and engineer alert dashboard. The dashboard is a read/acknowledge client, not a control path.
+Attack and normal scripts feed a Modbus TCP simulator. The simulator feeds a collector and SQLite event store. A layered rules and baseline detector feeds a FastAPI service and engineer alert dashboard. The dashboard is primarily a read/acknowledge client; it may offer explicitly engineer-confirmed actions against the simulator only, never autonomous control.
 
 ## Components
 
@@ -48,7 +48,7 @@ Use held-out scenarios. Report per-attack recall, precision, false alerts per no
 
 ## Reliability and security
 
-All components run locally. If the UI or network disappears, collection continues in SQLite and the dashboard catches up by event ID after reconnection. Uncertain cases become review alerts and never issue a control command. Bind Modbus to localhost, validate registers and schemas, and hash-chain append-only events for tamper evidence.
+All components run locally. If the UI or network disappears, collection continues in SQLite and the dashboard catches up by event ID after reconnection. Uncertain cases become review alerts and never issue a control command. A confirmed simulator action records the operator, alert, exact command, timestamp, and resulting state. Bind Modbus to localhost, validate registers and schemas, and hash-chain append-only events for tamper evidence.
 
 ## Three-week delivery
 
