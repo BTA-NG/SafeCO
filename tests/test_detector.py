@@ -351,7 +351,7 @@ def test_immediate_repeated_command_in_same_context_is_not_replay():
 
 
 def test_command_rate_spike_is_flagged_for_repeated_actuator_writes():
-    history = [_event(sequence_id=i, target="pump", value=i % 2) for i in range(1, 7)]
+    history = [_event(sequence_id=i, target="pump", value=1) for i in range(1, 7)]
     event = _event(sequence_id=7, target="pump", value=1)
     alerts = check_rate_and_drift(event, history)
     assert _codes(alerts) == {ReasonCode.COMMAND_RATE_SPIKE}

@@ -314,13 +314,18 @@ def extended_normal_steps() -> list[Step]:
 def grid_recovery_steps() -> list[Step]:
     """Build the grid-recovery scenario: grid loss -> generator transfer -> RUNNING."""
 
+    def enter_recovery(sim: PlantSimulator) -> None:
+        sim.apply_coil(Register.PUMP_COMMAND, 0)
+        sim.state.power_source = PowerSource.OFF
+        sim.force_mode_command(int(OperatingMode.RECOVERY))
+
     def restart(sim: PlantSimulator) -> None:
         sim.apply_coil(Register.PUMP_COMMAND, 1)
         sim.apply_holding(Register.MODE_COMMAND, 2)
 
     return [
         ("configure_running", 1.0, _configure_running),
-        ("grid_loss", 5.0, lambda s: s.state.begin_grid_recovery()),
+        ("grid_loss", 5.0, enter_recovery),
         ("transfer_to_generator", 3.0, lambda s: s.state.transfer_to_generator()),
         ("resume_after_recovery", 5.0, lambda s: s.state.resume_after_recovery()),
         ("restart_and_run", 10.0, restart),

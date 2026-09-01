@@ -89,6 +89,9 @@ class ReasonCode(StrEnum):
     COMMAND_RATE_SPIKE = "command_rate_spike"
     SETPOINT_DRIFT = "setpoint_drift"
 
+    # Layer 5 - statistical baseline
+    BASELINE_DEVIATION = "baseline_deviation"
+
     # Cross-layer
     INSUFFICIENT_CONTEXT = "insufficient_context"
 
@@ -287,6 +290,20 @@ TEMPLATES: dict[ReasonCode, AlertTemplate] = {
         ),
         severity=Severity.HIGH,
         confidence=0.85,
+    ),
+    ReasonCode.BASELINE_DEVIATION: AlertTemplate(
+        title="Command differs from normal baseline",
+        explanation=(
+            "This {command} event for {target} in {mode} mode is unusual for "
+            "the learned normal baseline. Features outside range: "
+            "{features_text}."
+        ),
+        recommended_action=(
+            "Review the event as an anomaly, compare it with recent plant "
+            "history, and confirm whether the command matches normal procedure."
+        ),
+        severity=Severity.MEDIUM,
+        confidence=0.75,
     ),
     ReasonCode.INSUFFICIENT_CONTEXT: AlertTemplate(
         title="Not enough process context to complete all checks",
