@@ -50,7 +50,10 @@ class EventStore:
         """
         self.database = Path(database)
         self.database.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.database)
+        self.connection = sqlite3.connect(
+            self.database,
+            check_same_thread=False,
+        )
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.executescript(SCHEMA)
