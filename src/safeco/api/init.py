@@ -1,0 +1,1 @@
+"SafeCO API - built using FastAPI"
