@@ -68,8 +68,7 @@ state; it is distinct from autonomous response and is not a real-plant control p
 - FastAPI endpoints and local dashboard.
 - Optional confirmed simulator action with operator and command audit fields.
 - Offline collection/reconnect catch-up and degraded-visibility state.
-- Held-out evaluation with precision, recall, false alerts per normal hour, latency,
-  confusion matrix, missed attacks, and maintenance false positives.
+- Held-out evaluation latency, confusion matrix, and expanded error analysis.
 - One-command demo packaging, screenshots, four-page report, and clean-checkout rehearsal.
 
 ## Evidence to capture next
@@ -78,6 +77,35 @@ For each scenario, record: command to run, seed, generator version, fingerprint,
 event count, expected ground truth, alert result, detection latency, and a
 representative event/alert JSON pair. Keep tuning/validation/held-out scenario IDs
 separate.
+
+## Detector evaluation notes
+
+- `src/safeco/evaluation.py` replays complete normal and attack scenarios through
+  the shared event contract and detector.
+- The evaluator reports precision, recall, false alerts per normal hour, missed
+  attacks, maintenance false positives, first detection event ID, and detection
+  latency in events and seconds.
+- Evaluation reports include a per-scenario classification table and aggregate
+  TP/FP/TN/FN counts.
+- Attack expectations are explicit: injection -> `unsafe_pump_start`, replay ->
+  `command_replay`, mistimed -> `recovery_out_of_sequence`, and drift ->
+  `setpoint_drift`.
+- Layer 5 statistical baseline training is implemented in `src/safeco/baseline.py`
+  using conservative median/MAD feature ranges learned from benign scenario
+  traces.
+- The evaluation CLI enables the baseline by default. Use `--without-baseline`
+  for rule-only metrics, or `--compare` to print rule-only and baseline-enabled
+  reports side by side.
+- Baseline-enabled metrics train Layer 5 only from benign tuning scenarios;
+  validation and held-out scenarios are excluded from `BaselineProfile.training_scenarios`.
+- Three baseline-only anomaly scenarios demonstrate Layer 5's added coverage:
+  `attack_baseline_low_tank_01`, `attack_baseline_high_limit_01`, and
+  `attack_baseline_mode_context_01`.
+- `python -m safeco.evaluation --samples-json` emits representative event/alert
+  JSON pairs for report evidence.
+- Scenario splits are explicit and non-overlapping: tuning, validation, and
+  held-out.
+- Known limitations are tracked in `docs/detector_evaluation.md`.
 
 ## Final report outline
 
