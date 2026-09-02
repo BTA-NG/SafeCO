@@ -26,6 +26,9 @@ from .simulator import PlantSimulator
 from .storage import EventStore
 
 EXPECTED_ATTACK_ALERTS: dict[str, ReasonCode] = {
+    "attack_baseline_high_limit_01": ReasonCode.BASELINE_DEVIATION,
+    "attack_baseline_low_tank_01": ReasonCode.BASELINE_DEVIATION,
+    "attack_baseline_mode_context_01": ReasonCode.BASELINE_DEVIATION,
     "attack_injection_01": ReasonCode.UNSAFE_PUMP_START,
     "attack_replay_01": ReasonCode.COMMAND_REPLAY,
     "attack_mistimed_01": ReasonCode.RECOVERY_OUT_OF_SEQUENCE,
@@ -44,6 +47,7 @@ TUNING_SCENARIOS: tuple[str, ...] = (
     "startup_01",
     "steady_running_01",
     "maintenance_01",
+    "attack_baseline_low_tank_01",
     "attack_injection_01",
     "attack_drift_01",
 )
@@ -55,7 +59,13 @@ VALIDATION_SCENARIOS: tuple[str, ...] = (
 HELD_OUT_SCENARIOS: tuple[str, ...] = (
     "extended_normal_01",
     "attack_mistimed_01",
+    "attack_baseline_mode_context_01",
 )
+
+BASELINE_TRAINING_SCENARIOS: tuple[str, ...] = tuple(
+    scenario_id for scenario_id in TUNING_SCENARIOS if scenario_id in NORMAL_SCENARIOS
+)
+"""Benign tuning scenarios used for Layer 5 training without held-out leakage."""
 
 
 @dataclass(frozen=True)
@@ -349,7 +359,7 @@ def evaluate_scenarios(
 
 
 def train_baseline_from_scenarios(
-    scenario_ids: Sequence[str] = BENIGN_EVALUATION_SCENARIOS,
+    scenario_ids: Sequence[str] = BASELINE_TRAINING_SCENARIOS,
     seed: int = 42,
 ) -> BaselineProfile:
     """Train a Layer 5 baseline from benign scenario IDs.
@@ -377,12 +387,17 @@ def train_baseline_from_scenarios(
     return train_baseline(traces, seed=seed)
 
 
+def train_baseline_for_evaluation(seed: int = 42) -> BaselineProfile:
+    """Train the default evaluation baseline without validation or held-out data."""
+    return train_baseline_from_scenarios(BASELINE_TRAINING_SCENARIOS, seed)
+
+
 def compare_rule_and_baseline(
     scenario_ids: Sequence[str] = DEFAULT_EVALUATION_SCENARIOS,
     seed: int = 42,
 ) -> EvaluationComparison:
     """Evaluate the same scenarios in rule-only and baseline-enabled modes."""
-    baseline_profile = train_baseline_from_scenarios(seed=seed)
+    baseline_profile = train_baseline_for_evaluation(seed=seed)
     return EvaluationComparison(
         rules_only=evaluate_scenarios(scenario_ids, seed),
         with_baseline=evaluate_scenarios(
@@ -454,29 +469,48 @@ def _print_report(report: EvaluationReport) -> None:
     )
     print()
     print("Scenario table:")
-    print(
-        "scenario_id".ljust(28),
-        "truth".ljust(12),
-        "class".ljust(5),
-        "alerts".rjust(6),
-        "latency_s".rjust(10),
+    headers = (
+        "scenario_id",
+        "truth",
+        "class",
+        "alerts",
+        "latency_s",
         "expected_reason",
     )
+    rows = []
     for scenario in report.scenarios:
-        expected = scenario.expected_reason_code or "-"
         latency = (
             f"{scenario.detection_latency_s:.2f}"
             if scenario.detection_latency_s is not None
             else "-"
         )
-        print(
-            scenario.scenario_id.ljust(28),
-            scenario.ground_truth.ljust(12),
-            scenario.classification.ljust(5),
-            str(scenario.actionable_alert_count).rjust(6),
-            latency.rjust(10),
-            expected,
+        rows.append(
+            (
+                scenario.scenario_id,
+                scenario.ground_truth,
+                scenario.classification,
+                str(scenario.actionable_alert_count),
+                latency,
+                str(scenario.expected_reason_code or "-"),
+            )
         )
+    widths = [
+        max(len(header), *(len(row[index]) for row in rows))
+        for index, header in enumerate(headers)
+    ]
+    numeric_columns = {3, 4}
+
+    def render_row(row: Sequence[str]) -> str:
+        cells = []
+        for index, value in enumerate(row):
+            align = str.rjust if index in numeric_columns else str.ljust
+            cells.append(align(value, widths[index]))
+        return " | ".join(cells)
+
+    print(render_row(headers))
+    print("-+-".join("-" * width for width in widths))
+    for row in rows:
+        print(render_row(row))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -492,7 +526,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     scenario_ids = HELD_OUT_SCENARIOS if args.held_out else DEFAULT_EVALUATION_SCENARIOS
     baseline_profile = (
-        None if args.without_baseline else train_baseline_from_scenarios(seed=args.seed)
+        None if args.without_baseline else train_baseline_for_evaluation(args.seed)
     )
 
     if args.samples_json:

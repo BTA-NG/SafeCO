@@ -55,6 +55,22 @@ PYTHONPATH=src python -m safeco.evaluation --samples-json
 
 Scenarios are explicitly split into tuning, validation, and held-out sets. The
 held-out set can be evaluated without running or tuning on the tuning scenarios.
+The default Layer 5 baseline is trained only from benign tuning scenarios, not
+from validation or held-out scenarios.
+
+## Baseline-Only Anomalies
+
+SafeCO includes baseline-only anomaly scenarios that remain protocol-valid and
+do not trigger deterministic safety rules. They are designed to demonstrate the
+difference between rule-only and baseline-enabled evaluation:
+
+- `attack_baseline_low_tank_01`
+- `attack_baseline_high_limit_01`
+- `attack_baseline_mode_context_01`
+
+Run `PYTHONPATH=src python -m safeco.evaluation --compare` to show these as
+missed in rule-only mode and detected as `baseline_deviation` with Layer 5
+enabled.
 
 ## Known Limitations
 

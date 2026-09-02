@@ -1,6 +1,7 @@
 from safeco.alerts import ReasonCode
 from safeco.evaluation import (
     ATTACK_EVALUATION_SCENARIOS,
+    BASELINE_TRAINING_SCENARIOS,
     BENIGN_EVALUATION_SCENARIOS,
     DEFAULT_EVALUATION_SCENARIOS,
     EXPECTED_ATTACK_ALERTS,
@@ -13,7 +14,7 @@ from safeco.evaluation import (
     events_for_scenario,
     main,
     sample_evidence_pairs,
-    train_baseline_from_scenarios,
+    train_baseline_for_evaluation,
 )
 from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
@@ -36,6 +37,14 @@ def test_every_split_scenario_exists():
     assert set(HELD_OUT_SCENARIOS) <= known
 
 
+def test_default_baseline_training_excludes_validation_and_held_out_scenarios():
+    profile = train_baseline_for_evaluation()
+    assert set(profile.training_scenarios) == set(BASELINE_TRAINING_SCENARIOS)
+    assert set(profile.training_scenarios).isdisjoint(VALIDATION_SCENARIOS)
+    assert set(profile.training_scenarios).isdisjoint(HELD_OUT_SCENARIOS)
+    assert set(profile.training_scenarios) <= set(NORMAL_SCENARIOS)
+
+
 def test_default_evaluation_scenarios_cover_registries():
     assert set(BENIGN_EVALUATION_SCENARIOS) == set(NORMAL_SCENARIOS)
     assert set(ATTACK_EVALUATION_SCENARIOS) == set(ATTACK_SCENARIOS)
@@ -54,8 +63,9 @@ def test_benign_scenarios_have_no_expected_attack_reason():
 
 
 def test_each_attack_detects_expected_reason_code():
+    profile = train_baseline_for_evaluation()
     for scenario_id, reason_code in EXPECTED_ATTACK_ALERTS.items():
-        result = evaluate_scenario(scenario_id)
+        result = evaluate_scenario(scenario_id, baseline_profile=profile)
         assert result.expected_reason_code == reason_code
         assert result.detected_expected is True
         assert reason_code in result.reason_codes
@@ -67,7 +77,8 @@ def test_each_attack_detects_expected_reason_code():
 
 
 def test_evaluation_report_computes_recall_and_precision():
-    report = evaluate_scenarios()
+    profile = train_baseline_for_evaluation()
+    report = evaluate_scenarios(baseline_profile=profile)
     assert report.recall == 1.0
     assert report.precision == 1.0
     assert report.false_alerts_per_normal_hour == 0.0
@@ -117,16 +128,32 @@ def test_rule_only_and_baseline_reports_are_separate():
     comparison = compare_rule_and_baseline()
     assert comparison.rules_only.detector_mode == "rules_only"
     assert comparison.with_baseline.detector_mode == "with_baseline"
-    assert comparison.rules_only.recall == 1.0
+    assert comparison.rules_only.recall < comparison.with_baseline.recall
     assert comparison.with_baseline.recall == 1.0
+    assert comparison.rules_only.missed_attacks
 
 
 def test_baseline_mode_still_detects_all_expected_rule_alerts():
-    profile = train_baseline_from_scenarios()
+    profile = train_baseline_for_evaluation()
     for scenario_id, reason_code in EXPECTED_ATTACK_ALERTS.items():
         result = evaluate_scenario(scenario_id, baseline_profile=profile)
         assert result.detector_mode == "with_baseline"
         assert reason_code in result.reason_codes
+
+
+def test_baseline_only_scenarios_differ_between_modes():
+    profile = train_baseline_for_evaluation()
+    for scenario_id in (
+        "attack_baseline_high_limit_01",
+        "attack_baseline_low_tank_01",
+        "attack_baseline_mode_context_01",
+    ):
+        rules_only = evaluate_scenario(scenario_id)
+        with_baseline = evaluate_scenario(scenario_id, baseline_profile=profile)
+        assert rules_only.classification == "FN"
+        assert ReasonCode.BASELINE_DEVIATION not in rules_only.reason_codes
+        assert with_baseline.classification == "TP"
+        assert ReasonCode.BASELINE_DEVIATION in with_baseline.reason_codes
 
 
 def test_sample_evidence_pairs_include_event_and_alert():
@@ -141,6 +168,10 @@ def test_cli_defaults_to_baseline(capsys):
     output = capsys.readouterr().out
     assert "Mode: with_baseline" in output
     assert "Scenario table:" in output
+    assert "scenario_id" in output
+    assert "-+-" in output
+    assert "attack_baseline_mode_context_01" in output
+    assert " | baseline_anomaly | " in output
 
 
 def test_cli_without_baseline_opts_out(capsys):

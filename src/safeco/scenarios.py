@@ -34,6 +34,9 @@ GROUND_TRUTH: dict[str, str] = {
     "attack_replay_01": "replay",
     "attack_mistimed_01": "mistimed",
     "attack_drift_01": "drift",
+    "attack_baseline_low_tank_01": "baseline_anomaly",
+    "attack_baseline_high_limit_01": "baseline_anomaly",
+    "attack_baseline_mode_context_01": "baseline_anomaly",
 }
 """Override map for ground-truth labels.
 
@@ -396,6 +399,51 @@ def attack_drift_steps() -> list[Step]:
     return steps
 
 
+def attack_baseline_low_tank_steps() -> list[Step]:
+    """Build baseline-only anomaly: safe pump write in unusual low-level context."""
+
+    def unusual_context(sim: PlantSimulator) -> None:
+        sim.state.tank_level = 5.0
+        sim.state.target_level = 40.0
+        sim.state.high_level_limit = 99.0
+        sim.apply_coil(Register.PUMP_COMMAND, 1)
+
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("attacker_low_tank_context", 2.0, unusual_context),
+    ]
+
+
+def attack_baseline_high_limit_steps() -> list[Step]:
+    """Build baseline-only anomaly: safe pump stop in unusual high-limit context."""
+
+    def unusual_context(sim: PlantSimulator) -> None:
+        sim.state.tank_level = 88.0
+        sim.state.target_level = 45.0
+        sim.state.high_level_limit = 99.0
+        sim.apply_coil(Register.PUMP_COMMAND, 0)
+
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("attacker_high_limit_context", 2.0, unusual_context),
+    ]
+
+
+def attack_baseline_mode_context_steps() -> list[Step]:
+    """Build baseline-only anomaly: normal mode write in unusual process context."""
+
+    def unusual_context(sim: PlantSimulator) -> None:
+        sim.state.tank_level = 10.0
+        sim.state.target_level = 35.0
+        sim.state.high_level_limit = 99.0
+        sim.apply_holding(Register.MODE_COMMAND, int(OperatingMode.RUNNING))
+
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("attacker_mode_context", 2.0, unusual_context),
+    ]
+
+
 NORMAL_SCENARIOS.update(
     {
         "startup_01": startup_steps,
@@ -418,6 +466,9 @@ ATTACK_SCENARIOS.update(
         "attack_replay_01": attack_replay_steps,
         "attack_mistimed_01": attack_mistimed_steps,
         "attack_drift_01": attack_drift_steps,
+        "attack_baseline_low_tank_01": attack_baseline_low_tank_steps,
+        "attack_baseline_high_limit_01": attack_baseline_high_limit_steps,
+        "attack_baseline_mode_context_01": attack_baseline_mode_context_steps,
     }
 )
 

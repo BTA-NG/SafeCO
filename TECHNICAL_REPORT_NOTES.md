@@ -96,6 +96,11 @@ separate.
 - The evaluation CLI enables the baseline by default. Use `--without-baseline`
   for rule-only metrics, or `--compare` to print rule-only and baseline-enabled
   reports side by side.
+- Baseline-enabled metrics train Layer 5 only from benign tuning scenarios;
+  validation and held-out scenarios are excluded from `BaselineProfile.training_scenarios`.
+- Three baseline-only anomaly scenarios demonstrate Layer 5's added coverage:
+  `attack_baseline_low_tank_01`, `attack_baseline_high_limit_01`, and
+  `attack_baseline_mode_context_01`.
 - `python -m safeco.evaluation --samples-json` emits representative event/alert
   JSON pairs for report evidence.
 - Scenario splits are explicit and non-overlapping: tuning, validation, and
