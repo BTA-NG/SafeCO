@@ -17,8 +17,9 @@ from safeco.storage import EventStore
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Create the shared store at app startup and close it on shutdown."""
+    """Create the shared store and alert state at app startup."""
     app.state.store = EventStore("data/safeco.db")
+    app.state.alerts: list[dict[str, object]] = []
     try:
         yield
     finally:
