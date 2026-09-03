@@ -1,15 +1,28 @@
+from __future__ import annotations
+
 from fastapi import APIRouter
-from safeco.events import Event
+
+router = APIRouter(tags=["scenarios"])
 
 
-router = APIRouter()
+@router.get("/scenarios")
+async def list_scenarios() -> list[str]:
+    """List the known scenario identifiers.
+
+    This is a placeholder until the scenario runner is fully exposed through the
+    API.
+    """
+    return [
+        "startup_01",
+        "steady_running_01",
+        "controlled_shutdown_01",
+        "grid_recovery_01",
+        "maintenance_01",
+        "extended_normal_01",
+    ]
 
 
-# Scenario Control
-# start a scenario
-# GET a scenario status
-# GET all available scenarios
-
-@router.get("/scenario/{id}")
-async def single_scenario(event_id: int, event: Event):
-    if 
+@router.get("/scenarios/{scenario_id}")
+async def get_scenario(scenario_id: str) -> dict[str, str]:
+    """Return a scenario placeholder for UI integration."""
+    return {"scenario_id": scenario_id, "status": "not_implemented"}

@@ -1,16 +1,27 @@
+from __future__ import annotations
+
+from safeco.api.deps import StoreDep
 from fastapi import APIRouter
-from safeco.events import ProcessSnapshot
 
-router = APIRouter()
+router = APIRouter(tags=["health"])
 
-
-# Health Status (to check if SafeCO is up and running) 
-#  && Plant Status (To see the overall state of the plant)
-# has to be a GET request
-# another GET request here
-# should check t see if the Modbus feed is active and the database is running
 
 @router.get("/health")
-async def health_stats():
+async def health_status(store: StoreDep) -> dict[str, object]:
+    """Return the current health of the local SafeCO service.
 
-    return
+    The current implementation is intentionally lightweight. It confirms that the
+    SQLite store is reachable and reports the timestamp of the newest persisted
+    event when available.
+    """
+    latest = store.list_events(limit=1)
+    last_event_timestamp = latest[0]["timestamp"] if latest else None
+    return {
+        "status": "ok",
+        "database": "available",
+        "last_event_timestamp": last_event_timestamp,
+        "degraded_visibility": False,
+    }
+
+
+

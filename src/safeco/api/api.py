@@ -9,11 +9,11 @@ from fastapi import FastAPI
 app = FastAPI()
 
 
-app.include_router(health_router, prefix="/health")
-app.include_router(alert_router, prefix="/alert")
-app.include_router(event_router, prefix="/event")
-app.include_router(plant_state_router, prefix="/plant_state")
-app.include_router(scenario_router, prefix="/scenario")
+app.include_router(health_router, prefix="/api/health")
+app.include_router(alert_router, prefix="/api/alert")
+app.include_router(event_router, prefix="/api/event")
+app.include_router(plant_state_router, prefix="/api/plant/state")
+app.include_router(scenario_router, prefix="/api/scenarios")
 
 
 
