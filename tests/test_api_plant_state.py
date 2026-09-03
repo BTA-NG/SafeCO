@@ -47,6 +47,7 @@ def test_plant_state_returns_latest_snapshot(store_with_event) -> None:
     response = client.get("/api/plant/state")
     assert response.status_code == 200
     payload = response.json()
+    assert payload["status"] == "ok"
     assert payload["scenario_id"] == "maintenance_01"
     assert payload["process"]["tank_level"] == 63.1
     assert payload["process"]["mode"] == "maintenance"

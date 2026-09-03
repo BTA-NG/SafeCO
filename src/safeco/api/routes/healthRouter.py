@@ -1,26 +1,37 @@
 from __future__ import annotations
 
-from safeco.api.deps import StoreDep
 from fastapi import APIRouter
+
+from safeco.api.deps import StoreDep
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
 async def health_status(store: StoreDep) -> dict[str, object]:
-    """Return the current health of the local SafeCO service.
+    """Report the current local SafeCO status.
 
-    The current implementation is intentionally lightweight. It confirms that the
-    SQLite store is reachable and reports the timestamp of the newest persisted
-    event when available.
+    The dashboard uses this endpoint to decide whether the local collection feed
+    is healthy or degraded. If no events are present, the API exposes that state
+    explicitly instead of silently reporting a healthy system.
     """
     latest = store.list_events(limit=1)
-    last_event_timestamp = latest[0]["timestamp"] if latest else None
+    if not latest:
+        return {
+            "status": "degraded",
+            "database": "available",
+            "last_event_timestamp": None,
+            "degraded_visibility": True,
+            "event_count": 0,
+        }
+
+    row = latest[0]
     return {
         "status": "ok",
         "database": "available",
-        "last_event_timestamp": last_event_timestamp,
+        "last_event_timestamp": row["timestamp"],
         "degraded_visibility": False,
+        "event_count": 1,
     }
 
 
