@@ -1,3 +1,9 @@
+"""Alert feed routes for the SafeCO API.
+
+Routes handle alert listing, filtering, acknowledgement against in-memory state.
+Alert persistence is deferred to a future milestone.
+"""
+
 from __future__ import annotations
 
 from typing import Any
