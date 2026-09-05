@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 from safeco.events import Event, ProcessSnapshot
@@ -71,4 +73,38 @@ def test_event_queries_support_scenario_filter_and_catch_up(tmp_path):
     assert store.events_after(first.event_id, limit=1)[0]["event_id"] == second.event_id
     with pytest.raises(KeyError):
         store.events_after("missing-event")
+    store.close()
+
+
+def test_event_store_handles_concurrent_access(tmp_path):
+    """Concurrent appends and reads on the shared connection stay consistent.
+
+    The API shares one EventStore connection across FastAPI request threads, so
+    the store must serialize access. This exercises interleaved writers and
+    readers and then verifies the hash chain is intact.
+    """
+    store = EventStore(tmp_path / "events.db")
+    workers = 8
+    per_worker = 25
+    errors: list[Exception] = []
+    barrier = threading.Barrier(workers)
+
+    def worker(worker_id: int) -> None:
+        barrier.wait()
+        try:
+            for i in range(per_worker):
+                store.append(sample_event(worker_id * per_worker + i))
+                store.list_events(limit=5)
+        except Exception as exc:  # noqa: BLE001 - surface any threading failure
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(w,)) for w in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(store.list_events(limit=1000)) == workers * per_worker
+    assert store.verify_chain() == (True, None)
     store.close()
