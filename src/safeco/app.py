@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from safeco.alert_store import AlertStore
 from safeco.api.routes.alert_router import router as alert_router
 from safeco.api.routes.event_router import router as event_router
 from safeco.api.routes.health_router import router as health_router
@@ -16,6 +17,7 @@ from safeco.api.routes.scenario_router import router as scenario_router
 from safeco.storage import EventStore
 
 DEFAULT_DATABASE = "data/safeco.db"
+DEFAULT_ALERT_DATABASE = "data/safeco_alerts.db"
 
 
 def database_path() -> str:
@@ -27,25 +29,38 @@ def database_path() -> str:
     return os.environ.get("SAFECO_DATABASE", DEFAULT_DATABASE)
 
 
+def alert_database_path() -> str:
+    """Return the alert-store path, overridable via ``SAFECO_ALERT_DATABASE``.
+
+    Production defaults to ``data/safeco_alerts.db`` — a separate file from the
+    event store so the two never hold competing writer connections.
+    """
+    return os.environ.get("SAFECO_ALERT_DATABASE", DEFAULT_ALERT_DATABASE)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Create and tear down shared resources deterministically.
 
     The lifespan only creates and closes what it owns. If a store has already
     been injected onto ``app.state`` (as tests do), it is left untouched so the
-    injector controls its lifecycle and the real database is never opened.
+    injector controls its lifecycle and the real databases are never opened.
     """
     owns_store = getattr(app.state, "store", None) is None
     if owns_store:
         app.state.store = EventStore(database_path())
-    if getattr(app.state, "alerts", None) is None:
-        app.state.alerts = []
+    owns_alert_store = getattr(app.state, "alert_store", None) is None
+    if owns_alert_store:
+        app.state.alert_store = AlertStore(alert_database_path())
     try:
         yield
     finally:
         if owns_store:
             app.state.store.close()
             app.state.store = None
+        if owns_alert_store:
+            app.state.alert_store.close()
+            app.state.alert_store = None
 
 
 app = FastAPI(
