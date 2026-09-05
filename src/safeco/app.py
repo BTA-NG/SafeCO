@@ -5,8 +5,11 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from safeco.alert_store import AlertStore
 from safeco.api.routes.alert_router import router as alert_router
@@ -18,6 +21,7 @@ from safeco.storage import EventStore
 
 DEFAULT_DATABASE = "data/safeco.db"
 DEFAULT_ALERT_DATABASE = "data/safeco_alerts.db"
+STATIC_DIR = Path(__file__).parent / "api" / "static"
 
 
 def database_path() -> str:
@@ -75,3 +79,13 @@ app.include_router(event_router, prefix="/api")
 app.include_router(alert_router, prefix="/api")
 app.include_router(plant_state_router, prefix="/api")
 app.include_router(scenario_router, prefix="/api")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    """Serve the operator dashboard page."""
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+# Dashboard assets (CSS/JS). Mounted after the API routes so /api/* wins.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

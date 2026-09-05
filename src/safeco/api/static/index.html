@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SafeCO — Adupe Municipal Water Station</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="product">SafeCO</span>
+        <span class="tagline">Advisory command monitor for industrial control systems</span>
+      </div>
+      <div class="site-line">
+        Monitored site: <span class="site">Adupe Municipal Water Station</span>
+        <span class="muted">(example deployment)</span>
+      </div>
+      <p class="advisory">
+        Advisory monitor. SafeCO observes and explains commands; it does not
+        block them or change the plant. A human decides and acts.
+      </p>
+    </header>
+
+    <div id="health-banner" class="banner" hidden></div>
+
+    <main>
+      <section id="plant-state" class="panel">
+        <h2>Plant state</h2>
+        <p class="muted" data-empty>Waiting for the local control feed…</p>
+        <dl class="state-grid" hidden>
+          <div><dt>Operating mode</dt><dd data-field="mode">—</dd></div>
+          <div><dt>Tank level</dt><dd data-field="tank_level">—</dd></div>
+          <div><dt>Pump</dt><dd data-field="pump_state">—</dd></div>
+          <div><dt>Inlet valve</dt><dd data-field="inlet_valve_state">—</dd></div>
+          <div><dt>Outlet valve</dt><dd data-field="outlet_valve_state">—</dd></div>
+          <div><dt>Power source</dt><dd data-field="power_source">—</dd></div>
+          <div><dt>Target level</dt><dd data-field="target_level">—</dd></div>
+          <div><dt>High-level limit</dt><dd data-field="high_level_limit">—</dd></div>
+        </dl>
+        <div class="level-track" hidden>
+          <div class="level-fill" data-field="tank_level_bar"></div>
+          <div class="level-limit" data-field="high_level_limit_mark"></div>
+        </div>
+      </section>
+
+      <section id="scenario-controls" class="panel">
+        <h2>Run a scenario</h2>
+        <p class="muted">
+          Runs the simulator so its consequences can be observed. Seeded for
+          reproducibility.
+        </p>
+        <form id="scenario-form">
+          <label for="scenario-select">Scenario</label>
+          <select id="scenario-select" name="scenario"></select>
+          <label for="seed-input">Seed</label>
+          <input id="seed-input" name="seed" type="number" value="42" min="0" />
+          <button type="submit">Run scenario</button>
+        </form>
+        <p id="scenario-result" class="muted" role="status"></p>
+      </section>
+
+      <section id="alerts" class="panel">
+        <h2>Alerts</h2>
+        <p class="muted" data-empty>No alerts. An empty queue is not proof of safety.</p>
+        <ul class="alert-list"></ul>
+      </section>
+
+      <section id="events" class="panel">
+        <h2>Recent events</h2>
+        <p class="muted" data-empty>No events recorded yet.</p>
+        <table class="events-table" hidden>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Scenario</th>
+              <th>Source</th>
+              <th>Command</th>
+              <th>Target</th>
+              <th>Value</th>
+              <th>Mode</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <footer>
+      <p class="muted">
+        SafeCO is a local-first advisory monitor for industrial/utility control
+        systems. Adupe is a fictional, representative site used here as an example
+        deployment. The hash chain detects later modification of stored events,
+        not whether a sensor reading was truthful.
+      </p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
