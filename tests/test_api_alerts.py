@@ -45,7 +45,9 @@ def test_missing_alert_returns_404() -> None:
 
 def test_acknowledge_alert_updates_in_memory_state() -> None:
     """The acknowledgement endpoint should update the in-memory alert state."""
-    app.state.alerts = [{"alert_id": "test-alert", "event_id": "event-1", "acknowledged": False}]
+    app.state.alerts = [
+        {"alert_id": "test-alert", "event_id": "event-1", "acknowledged": False}
+    ]
 
     response = client.patch("/api/alerts/test-alert/ack")
     assert response.status_code == 200

@@ -80,10 +80,7 @@ async def get_event(event_id: str, store: StoreDep = None) -> dict[str, object]:
     The returned event includes all Event contract fields with value and process
     properly deserialized as objects.
     """
-    row = store.connection.execute(
-        "SELECT * FROM events WHERE event_id = ?",
-        (event_id,),
-    ).fetchone()
+    row = store.get_event(event_id)
     if row is None:
         raise HTTPException(status_code=404, detail="event not found")
     event = _row_to_event(row)

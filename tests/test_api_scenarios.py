@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from safeco.app import app
-from safeco.scenarios import NORMAL_SCENARIOS, ATTACK_SCENARIOS
+from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
 client = TestClient(app)
 

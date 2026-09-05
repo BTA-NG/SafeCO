@@ -7,11 +7,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from safeco.api.routes.alertRouter import router as alert_router
-from safeco.api.routes.eventRouter import router as event_router
-from safeco.api.routes.healthRouter import router as health_router
-from safeco.api.routes.plantStateRouter import router as plant_state_router
-from safeco.api.routes.scenarioRouter import router as scenario_router
+from safeco.api.routes.alert_router import router as alert_router
+from safeco.api.routes.event_router import router as event_router
+from safeco.api.routes.health_router import router as health_router
+from safeco.api.routes.plant_state_router import router as plant_state_router
+from safeco.api.routes.scenario_router import router as scenario_router
 from safeco.storage import EventStore
 
 

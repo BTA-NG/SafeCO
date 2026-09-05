@@ -1,3 +1,10 @@
+"""Health endpoint for the SafeCO API.
+
+Reports whether the local collection feed is healthy or degraded so the
+dashboard can surface degraded visibility instead of implying a healthy
+system when no events are present.
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -33,6 +40,3 @@ async def health_status(store: StoreDep) -> dict[str, object]:
         "degraded_visibility": False,
         "event_count": 1,
     }
-
-
-

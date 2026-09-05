@@ -67,3 +67,36 @@ def test_plant_state_handles_empty_store(tmp_path) -> None:
         assert payload["process"] is None
     finally:
         store.close()
+
+
+def test_plant_state_returns_full_event_contract_shape(store_with_event) -> None:
+    """Plant state should return the full Event contract, not just process dict."""
+    response = client.get("/api/plant/state")
+    assert response.status_code == 200
+    payload = response.json()
+
+    # Verify all Event contract fields are present
+    assert "event_id" in payload
+    assert "timestamp" in payload
+    assert "scenario_id" in payload
+    assert "ground_truth" in payload
+    assert "source" in payload
+    assert "command" in payload
+    assert "target" in payload
+    assert "value" in payload
+    assert "mode" in payload
+    assert "sequence_id" in payload
+    assert "process" in payload
+
+    # Verify process is a dict with ProcessSnapshot fields
+    assert isinstance(payload["process"], dict)
+    assert payload["process"]["tank_level"] == 63.1
+    assert payload["process"]["valve_state"] == "open"
+    assert payload["process"]["pump_state"] == "on"
+
+    # Verify Event fields have correct values
+    assert payload["ground_truth"] == "maintenance"
+    assert payload["source"] == "scheduler"
+    assert payload["command"] == "telemetry"
+    assert payload["scenario_id"] == "maintenance_01"
+    assert payload["sequence_id"] == 1

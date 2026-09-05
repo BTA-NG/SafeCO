@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from safeco.scenarios import NORMAL_SCENARIOS, ATTACK_SCENARIOS
+from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
 router = APIRouter(tags=["scenarios"])
 
