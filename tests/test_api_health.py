@@ -5,19 +5,14 @@ from fastapi.testclient import TestClient
 
 from safeco.app import app
 from safeco.events import Event, ProcessSnapshot
-from safeco.storage import EventStore
 
 client = TestClient(app)
 
 
 @pytest.fixture()
-def populated_store(tmp_path):
-    """Attach a temporary SQLite store to the app for route tests."""
-    database = tmp_path / "health.db"
-    store = EventStore(database)
-    app.state.store = store
-    yield store
-    store.close()
+def populated_store(api_store):
+    """Alias the shared per-test store injected by the autouse fixture."""
+    return api_store
 
 
 def test_health_endpoint_reports_ok(populated_store) -> None:

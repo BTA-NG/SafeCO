@@ -5,19 +5,14 @@ from fastapi.testclient import TestClient
 
 from safeco.app import app
 from safeco.events import Event, ProcessSnapshot
-from safeco.storage import EventStore
 
 client = TestClient(app)
 
 
 @pytest.fixture()
-def event_store(tmp_path):
-    """Build a temporary event store for event-route tests."""
-    database = tmp_path / "events.db"
-    store = EventStore(database)
-    app.state.store = store
-    yield store
-    store.close()
+def event_store(api_store):
+    """Alias the shared per-test store injected by the autouse fixture."""
+    return api_store
 
 
 def test_event_list_returns_recent_rows(event_store) -> None:

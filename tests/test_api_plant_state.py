@@ -5,17 +5,14 @@ from fastapi.testclient import TestClient
 
 from safeco.app import app
 from safeco.events import Event, ProcessSnapshot
-from safeco.storage import EventStore
 
 client = TestClient(app)
 
 
 @pytest.fixture()
-def store_with_event(tmp_path):
-    """Attach a temporary event store containing one process snapshot."""
-    database = tmp_path / "plant_state.db"
-    store = EventStore(database)
-    app.state.store = store
+def store_with_event(api_store):
+    """Seed the shared per-test store with one process snapshot."""
+    store = api_store
     event = Event(
         scenario_id="maintenance_01",
         ground_truth="maintenance",
@@ -38,8 +35,7 @@ def store_with_event(tmp_path):
         sequence_id=1,
     )
     store.append(event)
-    yield store
-    store.close()
+    return store
 
 
 def test_plant_state_returns_latest_snapshot(store_with_event) -> None:
@@ -54,19 +50,13 @@ def test_plant_state_returns_latest_snapshot(store_with_event) -> None:
     assert payload["process"]["power_source"] == "generator"
 
 
-def test_plant_state_handles_empty_store(tmp_path) -> None:
+def test_plant_state_handles_empty_store(api_store) -> None:
     """An empty store should return a safe no-data response."""
-    database = tmp_path / "empty.db"
-    store = EventStore(database)
-    app.state.store = store
-    try:
-        response = client.get("/api/plant/state")
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["status"] == "no_data"
-        assert payload["process"] is None
-    finally:
-        store.close()
+    response = client.get("/api/plant/state")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "no_data"
+    assert payload["process"] is None
 
 
 def test_plant_state_returns_full_event_contract_shape(store_with_event) -> None:

@@ -9,16 +9,29 @@ from fastapi import Depends
 from safeco.storage import EventStore
 
 
+def _is_open(store: EventStore | None) -> bool:
+    """Return True if the store has a live (non-closed) connection."""
+    if store is None:
+        return False
+    try:
+        store.connection.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
 def get_store() -> EventStore:
     """Return the shared SQLite event store for API request handlers.
 
-    The app creates a single store at startup and reuses it across requests.
+    Reuses the store injected by the app lifespan (or a test). If none exists,
+    or the existing one has been closed, a fresh store is opened against the
+    configured database path so a handler never receives a dead connection.
     """
-    from safeco.app import app
+    from safeco.app import app, database_path
 
     store = getattr(app.state, "store", None)
-    if store is None:
-        store = EventStore("data/safeco.db")
+    if not _is_open(store):
+        store = EventStore(database_path())
         app.state.store = store
     return store
 

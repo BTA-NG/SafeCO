@@ -61,6 +61,10 @@ class EventStore:
         )
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
+        # Bound how long a locked database will block. Without this a stale WAL
+        # lock (for example from another process on a clean checkout) can wedge a
+        # request until the client times out; with it SQLite raises instead.
+        self.connection.execute("PRAGMA busy_timeout=5000")
         self.connection.executescript(SCHEMA)
         self.connection.commit()
 
