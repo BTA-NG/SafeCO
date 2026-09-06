@@ -38,23 +38,27 @@ CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alerts(acknowledged);
 class AlertStore:
     """SQLite persistence for alerts keyed by their deterministic id."""
 
-    def __init__(self, database: str | Path = "data/safeco.db") -> None:
+    def __init__(self, database: str | Path = "data/safeco_alerts.db") -> None:
         """Open (or create) the alert database and ensure the schema exists.
 
         Args:
             database: Filesystem path for the database file. Parent
-                directories are created automatically. May share the same
-                file as ``EventStore`` since the table names do not collide.
+                directories are created automatically. Defaults to a file
+                separate from ``EventStore`` so the two stores never hold
+                competing writer connections to one SQLite file.
 
         """
         self.database = Path(database)
         self.database.parent.mkdir(parents=True, exist_ok=True)
         # One connection is shared across FastAPI request threads; the lock
-        # serializes access the same way EventStore does.
+        # serializes access the same way EventStore does. busy_timeout is a
+        # safety net if this store is ever pointed at a file another
+        # connection also writes.
         self._lock = threading.Lock()
         self.connection = sqlite3.connect(self.database, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA busy_timeout=5000")
         self.connection.executescript(SCHEMA)
         self.connection.commit()
 

@@ -82,3 +82,13 @@ def test_run_is_deterministic_on_seed(stores) -> None:
     first = client.post("/api/scenarios/startup_01/run", params={"seed": 7}).json()
     second = client.post("/api/scenarios/startup_01/run", params={"seed": 7}).json()
     assert first["fingerprint"] == second["fingerprint"]
+
+
+def test_run_fingerprint_matches_canonical_run_scenario(stores) -> None:
+    """Guard against drift: the endpoint must execute the scenario identically
+    to scenarios.run_scenario, so its fingerprint matches the canonical path."""
+    from safeco.scenarios import run_scenario, scenario_fingerprint
+
+    endpoint = client.post("/api/scenarios/startup_01/run", params={"seed": 5}).json()
+    canonical = scenario_fingerprint(run_scenario("startup_01", seed=5))
+    assert endpoint["fingerprint"] == canonical
