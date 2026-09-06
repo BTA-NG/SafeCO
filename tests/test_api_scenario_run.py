@@ -10,23 +10,15 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from safeco.alert_store import AlertStore
 from safeco.app import app
-from safeco.storage import EventStore
 
 client = TestClient(app)
 
 
 @pytest.fixture()
-def stores(tmp_path):
-    """Attach fresh event and alert stores to the app for one test."""
-    event_store = EventStore(tmp_path / "events.db")
-    alert_store = AlertStore(tmp_path / "alerts.db")
-    app.state.store = event_store
-    app.state.alert_store = alert_store
-    yield event_store, alert_store
-    event_store.close()
-    alert_store.close()
+def stores(api_stores):
+    """Alias the shared per-test event and alert stores."""
+    return api_stores
 
 
 def test_run_unknown_scenario_returns_404(stores) -> None:
@@ -85,8 +77,11 @@ def test_run_is_deterministic_on_seed(stores) -> None:
 
 
 def test_run_fingerprint_matches_canonical_run_scenario(stores) -> None:
-    """Guard against drift: the endpoint must execute the scenario identically
-    to scenarios.run_scenario, so its fingerprint matches the canonical path."""
+    """Guard against execution drift between the endpoint and run_scenario.
+
+    The endpoint must execute the scenario identically to
+    ``scenarios.run_scenario``, so its fingerprint matches the canonical path.
+    """
     from safeco.scenarios import run_scenario, scenario_fingerprint
 
     endpoint = client.post("/api/scenarios/startup_01/run", params={"seed": 5}).json()

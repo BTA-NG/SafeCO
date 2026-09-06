@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from safeco.alert_store import AlertStore
 from safeco.alerts import ReasonCode, build_alert
 from safeco.app import app
 
@@ -11,12 +10,9 @@ client = TestClient(app)
 
 
 @pytest.fixture()
-def alert_store(tmp_path):
-    """Attach a temporary persistent alert store to the app."""
-    store = AlertStore(tmp_path / "alerts.db")
-    app.state.alert_store = store
-    yield store
-    store.close()
+def alert_store(api_alert_store):
+    """Alias the shared per-test alert store injected by the autouse fixture."""
+    return api_alert_store
 
 
 def _unsafe_pump_alert(event_id: str = "event-1"):
