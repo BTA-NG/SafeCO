@@ -1,22 +1,5 @@
 # SafeCO API
 
-This directory contains the FastAPI service for the SafeCO dashboard and local operator workflow. The API is intentionally a read layer on top of the existing backend contracts in the `safeco` package. It reads persisted events from SQLite, exposes the latest plant snapshot, and serves the alert feed for the dashboard.
-
-## Purpose
-
-The API is not the source of truth for plant behavior or detector logic. Those live in:
-
-- `src/safeco/storage.py`
-- `src/safeco/detector.py`
-- `src/safeco/collector.py`
-- `src/safeco/events.py`
-- `src/safeco/alerts.py`
-- `src/safeco/plant.py`
-
-The FastAPI layer provides a clean interface for the dashboard and local operator tooling.
-
-# SafeCO API
-
 This directory contains the FastAPI service and operator dashboard for SafeCO.
 SafeCO is a local-first advisory command monitor for industrial/utility control
 systems; Adupe Municipal Water Station is the example site used for the demo.
