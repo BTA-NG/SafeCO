@@ -111,6 +111,9 @@ def test_ground_truth_defaults_to_normal():
 
 def test_attack_scenarios_are_separate_from_benign_registry():
     assert set(ATTACK_SCENARIOS) == {
+        "attack_baseline_high_limit_01",
+        "attack_baseline_low_tank_01",
+        "attack_baseline_mode_context_01",
         "attack_injection_01",
         "attack_replay_01",
         "attack_mistimed_01",
@@ -126,6 +129,9 @@ def test_attack_scenarios_are_separate_from_benign_registry():
         ("attack_replay_01", "replay"),
         ("attack_mistimed_01", "mistimed"),
         ("attack_drift_01", "drift"),
+        ("attack_baseline_low_tank_01", "baseline_anomaly"),
+        ("attack_baseline_high_limit_01", "baseline_anomaly"),
+        ("attack_baseline_mode_context_01", "baseline_anomaly"),
     ],
 )
 def test_attack_scenarios_run_with_expected_ground_truth(scenario_id, ground_truth):

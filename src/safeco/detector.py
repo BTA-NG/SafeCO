@@ -387,6 +387,18 @@ def _process_fingerprint(event: Event) -> tuple[Any, ...]:
     )
 
 
+def _is_risky_replay_context(event: Event) -> bool:
+    """Return whether a repeated command is risky in the current context."""
+    process = event.process
+    if event.target == "pump" and event.value == 1:
+        return (
+            _resolve_inlet_state(process) == "closed" or process.power_source == "off"
+        )
+    if event.target == "mode":
+        return process.power_source == "off" or event.mode == "recovery"
+    return False
+
+
 def check_replay(event: Event, history: Sequence[Event] = ()) -> list[Alert]:
     """Evaluate Layer 3 replay and event-ordering checks.
 
@@ -434,6 +446,8 @@ def check_replay(event: Event, history: Sequence[Event] = ()) -> list[Alert]:
             )
 
     if event.command not in WRITE_COMMANDS:
+        return alerts
+    if not _is_risky_replay_context(event):
         return alerts
 
     fingerprint = _command_fingerprint(event)
@@ -493,6 +507,7 @@ def check_rate_and_drift(event: Event, history: Sequence[Event] = ()) -> list[Al
         candidate
         for candidate in window
         if candidate.command in WRITE_COMMANDS and candidate.target == event.target
+        if candidate.value == event.value
     ]
     if (
         event.target not in SETPOINT_TARGETS
@@ -572,7 +587,12 @@ def _severity_sort_key(alert: Alert) -> tuple[int, str]:
     return (-SEVERITY_RANK[Severity(alert.severity)], str(alert.reason_code))
 
 
-def detect(event: Event, history: Sequence[Event] = ()) -> list[Alert]:
+def detect(
+    event: Event,
+    history: Sequence[Event] = (),
+    *,
+    baseline_profile=None,
+) -> list[Alert]:
     """Run every implemented layer over one event.
 
     This is the detector's public entry point, as published in
@@ -583,6 +603,8 @@ def detect(event: Event, history: Sequence[Event] = ()) -> list[Alert]:
         event: The event under evaluation.
         history: Earlier events from the same logical run, oldest first,
             not including ``event``.
+        baseline_profile: Optional Layer 5 profile trained from benign
+            scenarios. When omitted, only deterministic layers run.
 
     Returns:
         Alerts ordered most urgent first, with at most one alert per
@@ -597,4 +619,8 @@ def detect(event: Event, history: Sequence[Event] = ()) -> list[Alert]:
         *check_replay(event, history),
         *check_rate_and_drift(event, history),
     ]
+    if baseline_profile is not None:
+        from .baseline import check_baseline
+
+        alerts.extend(check_baseline(event, history, baseline_profile))
     return sorted(_merge_context_alerts(event, alerts), key=_severity_sort_key)
