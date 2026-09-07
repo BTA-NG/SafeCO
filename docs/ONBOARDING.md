@@ -175,6 +175,9 @@ PYTHONPATH=src .venv/bin/python -m safeco.runtime
 | `grid_recovery_01` | grid loss → generator transfer → RUNNING | ~15s | None |
 | `maintenance_01` | 5× +1% target raises, 5× restores | ~50s | None |
 | `extended_normal_01` | A/B/C demand blocks + outlet service | ~969s | None |
+| `benign_spike_01` | transient +3% tank-level blip, self-restoring | ~12s | None |
+| `benign_duty_jitter_01` | drain/fill durations jittered ±15% | ~61s | None |
+| `benign_setpoint_nudge_01` | observed target-level +0.5% blip, restore | ~9s | None |
 
 ## Coding Standards
 
@@ -227,7 +230,7 @@ These files define the system's shared interface. Changes require Daniel's revie
 |---|-------|--------|
 | 1 | Foundation (simulator + 4 normal scenarios) | ✅ Done |
 | 2 | Normal plant & data (maintenance, extended normal, CLI, fingerprints) | ✅ Done |
-| 3 | Attacks (injection, replay, mistimed valid, slow drift) | ⬜ 28–31 Aug |
-| 4 | Detector support (process realism validation) | ⬜ 1–7 Sep |
+| 3 | Attacks (injection, replay, mistimed valid, slow drift) | ✅ Done |
+| 4 | Detector support (process realism validation) | ⬜ 1–7 Sep (benign anomalies + realism evidence) |
 | 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep |
 | 6 | Submission (4-page report, architecture figures, demo) | ⬜ 15–20 Sep |
