@@ -57,13 +57,24 @@ explained. It never blocks a command or acts on a real plant.
 
 ## Dashboard
 
-A plain, local operator page is served at `/`, with assets under `/static`. It
-polls `/api/health`, `/api/plant/state`, `/api/events`, and `/api/alerts`, lets an
-engineer run a scenario, and acknowledges alerts. It shows tank level, pump,
-inlet/outlet valves, power source, operating mode, recent events, and each alert's
-explanation, evidence, confidence, and recommended action. If the local feed is
-lost it keeps the last-known values and shows a degraded-visibility banner. The
-page never implies SafeCO acted automatically.
+A local operator console is served at `/`, with assets under `/static` (vanilla
+HTML/CSS/JS — no build step). It has tabbed views — **Plant state**, **Alerts**,
+**Events**, and **Scenarios** — over a persistent health banner, and polls
+`/api/health`, `/api/plant/state`, `/api/events`, and `/api/alerts`.
+
+- **Plant state**: operating mode, power source, pump and valve status pills, and
+  a tank-level bar with the high-level-limit marker.
+- **Alerts**: the detector queue with an unacknowledged badge, an all/unacknowledged
+  filter, and per-alert severity, explanation, evidence, confidence, and recommended
+  action, with a record-only acknowledge button.
+- **Events**: the recent event feed with a scenario filter and ground-truth labels.
+- **Scenarios**: run a scenario by id and seed and see the run summary.
+
+The palette is flat (white content, a dark header bar, and status/severity colours
+— no gradients). If the local feed is lost the console keeps the last-known values
+and shows a degraded-visibility banner. It never implies SafeCO acted automatically;
+acknowledgement is an engineer record, not a plant action.
+
 
 ## Deferred work
 

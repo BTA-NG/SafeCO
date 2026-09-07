@@ -1,12 +1,12 @@
-// SafeCO operator dashboard client.
+// SafeCO operator console client.
 //
-// Polls the local API and renders plant state, recent events, and alerts.
-// SafeCO is advisory: this page only reads state and records acknowledgement.
-// It never issues or blocks a control command.
+// Polls the local API and renders plant state, alerts, events, and scenario
+// controls across tabbed views. SafeCO is advisory: this page only reads state
+// and records acknowledgement. It never issues or blocks a control command.
 //
-// Offline story: if the local control feed cannot be reached, the page keeps
-// the last-known values on screen and shows a degraded-visibility banner rather
-// than blanking out or implying the plant is fine.
+// Offline story: if the local control feed cannot be reached, the page keeps the
+// last-known values on screen and shows a degraded-visibility banner rather than
+// blanking out or implying the plant is fine.
 
 "use strict";
 
@@ -20,15 +20,37 @@ const API = {
   scenarios: "/api/scenarios",
 };
 
-const state = { lastGood: null, degraded: false };
+const state = {
+  lastGood: null,
+  alertFilter: "all",
+  eventScenario: "",
+};
 
 async function getJSON(url) {
   const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) {
-    throw new Error(`${url} -> ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`${url} -> ${response.status}`);
   return response.json();
 }
+
+/* ---------- Tabs ---------- */
+
+function activateTab(name) {
+  for (const tab of document.querySelectorAll("[data-tab]")) {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+  }
+  for (const panel of document.querySelectorAll("[data-panel]")) {
+    panel.hidden = panel.dataset.panel !== name;
+  }
+}
+
+function setupTabs() {
+  for (const tab of document.querySelectorAll("[data-tab]")) {
+    tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+  }
+  activateTab("plant");
+}
+
+/* ---------- Health banner ---------- */
 
 function setBanner(mode, message) {
   const banner = document.getElementById("health-banner");
@@ -38,7 +60,6 @@ function setBanner(mode, message) {
 }
 
 function markDegraded(reason) {
-  state.degraded = true;
   setBanner(
     "degraded",
     `Degraded visibility — the local control feed is unreachable (${reason}). ` +
@@ -46,49 +67,89 @@ function markDegraded(reason) {
   );
 }
 
+/* ---------- Plant state ---------- */
+
 function fmtPercent(value) {
   return value === null || value === undefined ? "—" : `${Number(value).toFixed(1)}%`;
+}
+
+function pillClass(field, value) {
+  const v = String(value).toLowerCase();
+  if (field === "power_source") {
+    if (v === "off" || v === "unknown") return "bad";
+    if (v === "generator") return "info";
+    return "good";
+  }
+  if (field === "mode") {
+    if (v === "recovery") return "warn";
+    return "info";
+  }
+  if (field === "pump_state") return v === "on" ? "info" : "";
+  if (field === "inlet_valve_state" || field === "outlet_valve_state") {
+    return v === "open" ? "good" : "";
+  }
+  return "";
+}
+
+function setPill(grid, field, value) {
+  const dd = grid.querySelector(`[data-field="${field}"]`);
+  if (!dd) return;
+  const pill = dd.querySelector(".pill");
+  if (pill) {
+    pill.textContent = value ?? "—";
+    pill.className = `pill ${pillClass(field, value)}`.trim();
+  } else {
+    dd.textContent = value ?? "—";
+  }
 }
 
 function renderPlant(payload) {
   const panel = document.getElementById("plant-state");
   const empty = panel.querySelector("[data-empty]");
-  const grid = panel.querySelector(".state-grid");
-  const track = panel.querySelector(".level-track");
+  const body = panel.querySelector(".plant-body");
 
   if (!payload || payload.status === "no_data" || !payload.process) {
     empty.hidden = false;
-    grid.hidden = true;
-    track.hidden = true;
+    body.hidden = true;
     return;
   }
   const p = payload.process;
   empty.hidden = true;
-  grid.hidden = false;
-  track.hidden = false;
+  body.hidden = false;
 
-  const set = (field, value) => {
-    const node = grid.querySelector(`[data-field="${field}"]`);
-    if (node) node.textContent = value;
-  };
-  set("mode", p.mode ?? "—");
-  set("tank_level", fmtPercent(p.tank_level));
-  set("pump_state", p.pump_state ?? "—");
-  set("inlet_valve_state", p.inlet_valve_state ?? "—");
-  set("outlet_valve_state", p.outlet_valve_state ?? "—");
-  set("power_source", p.power_source ?? "—");
-  set("target_level", fmtPercent(p.target_level));
-  set("high_level_limit", fmtPercent(p.high_level_limit));
+  setPill(body, "mode", p.mode);
+  setPill(body, "power_source", p.power_source);
+  setPill(body, "pump_state", p.pump_state);
+  setPill(body, "inlet_valve_state", p.inlet_valve_state);
+  setPill(body, "outlet_valve_state", p.outlet_valve_state);
+  body.querySelector('[data-field="target_level"]').textContent = fmtPercent(
+    p.target_level
+  );
 
+  body.querySelector('[data-field="tank_level"]').textContent = fmtPercent(
+    p.tank_level
+  );
   const level = Math.max(0, Math.min(100, Number(p.tank_level) || 0));
-  track.querySelector(".level-fill").style.width = `${level}%`;
-  const limitMark = track.querySelector(".level-limit");
-  if (p.high_level_limit === null || p.high_level_limit === undefined) {
-    limitMark.hidden = true;
+  const fill = body.querySelector('[data-field="tank_level_bar"]');
+  fill.style.width = `${level}%`;
+  const limit = p.high_level_limit;
+  const over = limit !== null && limit !== undefined && level >= Number(limit);
+  fill.className = `level-fill${over ? " high" : ""}`;
+  const mark = body.querySelector('[data-field="high_level_limit_mark"]');
+  if (limit === null || limit === undefined) {
+    mark.hidden = true;
   } else {
-    limitMark.hidden = false;
-    limitMark.style.left = `${Math.max(0, Math.min(100, p.high_level_limit))}%`;
+    mark.hidden = false;
+    mark.style.left = `${Math.max(0, Math.min(100, Number(limit)))}%`;
   }
+}
+
+/* ---------- Events ---------- */
+
+function formatValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
 
 function renderEvents(rows) {
@@ -107,15 +168,17 @@ function renderEvents(rows) {
   table.hidden = false;
   for (const ev of rows) {
     const tr = document.createElement("tr");
-    const cells = [
-      (ev.timestamp || "").replace("T", " ").slice(0, 19),
-      ev.scenario_id,
-      ev.source,
-      ev.command,
-      ev.target,
-      formatValue(ev.value),
-      ev.mode,
-    ];
+    const time = document.createElement("td");
+    time.textContent = (ev.timestamp || "").replace("T", " ").slice(0, 19);
+    const scenario = document.createElement("td");
+    scenario.textContent = ev.scenario_id ?? "";
+    const gt = document.createElement("td");
+    const gtSpan = document.createElement("span");
+    gtSpan.className = `gt gt-${ev.ground_truth}`;
+    gtSpan.textContent = ev.ground_truth ?? "";
+    gt.appendChild(gtSpan);
+    const cells = [ev.source, ev.command, ev.target, formatValue(ev.value), ev.mode];
+    tr.append(time, scenario, gt);
     for (const value of cells) {
       const td = document.createElement("td");
       td.textContent = value ?? "";
@@ -125,10 +188,13 @@ function renderEvents(rows) {
   }
 }
 
-function formatValue(value) {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+/* ---------- Alerts ---------- */
+
+function updateAlertBadge(alerts) {
+  const badge = document.querySelector("[data-alert-count]");
+  const pending = alerts.filter((a) => a.acknowledged === false).length;
+  badge.textContent = String(pending);
+  badge.hidden = pending === 0;
 }
 
 function renderAlerts(alerts) {
@@ -137,12 +203,17 @@ function renderAlerts(alerts) {
   const list = panel.querySelector(".alert-list");
   list.textContent = "";
 
-  if (!alerts || alerts.length === 0) {
+  const shown =
+    state.alertFilter === "unacknowledged"
+      ? alerts.filter((a) => a.acknowledged === false)
+      : alerts;
+
+  if (!shown || shown.length === 0) {
     empty.hidden = false;
     return;
   }
   empty.hidden = true;
-  for (const alert of alerts) {
+  for (const alert of shown) {
     list.appendChild(renderAlert(alert));
   }
 }
@@ -157,28 +228,27 @@ function renderAlert(alert) {
   const title = document.createElement("span");
   title.className = "alert-title";
   title.textContent = alert.title;
-  const tag = document.createElement("span");
-  tag.className = `sev-tag ${sev}`;
-  tag.textContent = alert.severity;
-  head.append(title, tag);
+  const right = document.createElement("span");
+  if (alert.acknowledged) {
+    const flag = document.createElement("span");
+    flag.className = "ack-flag";
+    flag.textContent = "✓ acknowledged";
+    right.appendChild(flag);
+  } else {
+    const tag = document.createElement("span");
+    tag.className = `sev-tag ${sev}`;
+    tag.textContent = alert.severity;
+    right.appendChild(tag);
+  }
+  head.append(title, right);
   li.appendChild(head);
 
   const dl = document.createElement("dl");
-  const rows = [
-    ["Why it matters", alert.explanation],
-    ["Recommended action", alert.recommended_action],
-    ["Confidence", `${Math.round((alert.confidence ?? 0) * 100)}%`],
-    ["Event", alert.event_id],
-    ["Evidence", JSON.stringify(alert.evidence, null, 0)],
-  ];
-  for (const [label, value] of rows) {
-    const dt = document.createElement("dt");
-    dt.textContent = label;
-    const dd = document.createElement("dd");
-    if (label === "Evidence") dd.className = "evidence";
-    dd.textContent = value ?? "";
-    dl.append(dt, dd);
-  }
+  appendRow(dl, "Why it matters", alert.explanation);
+  appendRow(dl, "Recommended action", alert.recommended_action);
+  appendConfidence(dl, alert.confidence);
+  appendRow(dl, "Event", alert.event_id);
+  appendEvidence(dl, alert.evidence);
   li.appendChild(dl);
 
   if (!alert.acknowledged) {
@@ -193,6 +263,40 @@ function renderAlert(alert) {
     li.appendChild(actions);
   }
   return li;
+}
+
+function appendRow(dl, label, value) {
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  const dd = document.createElement("dd");
+  dd.textContent = value ?? "";
+  dl.append(dt, dd);
+}
+
+function appendEvidence(dl, evidence) {
+  const dt = document.createElement("dt");
+  dt.textContent = "Evidence";
+  const dd = document.createElement("dd");
+  dd.className = "evidence";
+  dd.textContent = JSON.stringify(evidence ?? {}, null, 0);
+  dl.append(dt, dd);
+}
+
+function appendConfidence(dl, confidence) {
+  const pct = Math.round((confidence ?? 0) * 100);
+  const dt = document.createElement("dt");
+  dt.textContent = "Confidence";
+  const dd = document.createElement("dd");
+  const meter = document.createElement("span");
+  meter.className = "confidence-meter";
+  const fill = document.createElement("span");
+  fill.className = "confidence-fill";
+  fill.style.display = "block";
+  fill.style.width = `${pct}%`;
+  fill.style.height = "100%";
+  meter.appendChild(fill);
+  dd.append(meter, document.createTextNode(`${pct}%`));
+  dl.append(dt, dd);
 }
 
 async function acknowledge(alertId, button) {
@@ -210,6 +314,20 @@ async function acknowledge(alertId, button) {
   }
 }
 
+function setupAlertFilter() {
+  for (const chip of document.querySelectorAll("[data-filter]")) {
+    chip.addEventListener("click", () => {
+      state.alertFilter = chip.dataset.filter;
+      for (const c of document.querySelectorAll("[data-filter]")) {
+        c.classList.toggle("active", c === chip);
+      }
+      if (state.lastGood) renderAlerts(state.lastGood.alerts);
+    });
+  }
+}
+
+/* ---------- Scenarios ---------- */
+
 async function loadScenarios() {
   const select = document.getElementById("scenario-select");
   try {
@@ -222,7 +340,7 @@ async function loadScenarios() {
       select.appendChild(option);
     }
   } catch (err) {
-    // Non-fatal: scenario controls just stay empty if discovery fails.
+    /* Non-fatal: scenario controls stay empty if discovery fails. */
   }
 }
 
@@ -241,25 +359,43 @@ async function runScenario(event) {
     });
     if (!response.ok) throw new Error(`run -> ${response.status}`);
     const data = await response.json();
+    const violations = (data.violations || []).length;
     result.textContent =
       `${data.scenario_id}: ${data.events} events, ${data.alerts} alert(s), ` +
-      `ground truth "${data.ground_truth}".`;
+      `${violations} invariant violation(s), ground truth "${data.ground_truth}".`;
     await refresh();
   } catch (err) {
     result.textContent = `Could not run scenario: ${err.message}`;
   }
 }
 
+/* ---------- Event scenario filter ---------- */
+
+function setupEventFilter() {
+  const input = document.getElementById("event-scenario-filter");
+  input.addEventListener("input", () => {
+    state.eventScenario = input.value.trim();
+    refresh();
+  });
+}
+
+function eventsUrl() {
+  return state.eventScenario
+    ? `/api/events?limit=25&scenario_id=${encodeURIComponent(state.eventScenario)}`
+    : API.events;
+}
+
+/* ---------- Poll loop ---------- */
+
 async function refresh() {
   try {
     const [health, plant, events, alerts] = await Promise.all([
       getJSON(API.health),
       getJSON(API.plant),
-      getJSON(API.events),
+      getJSON(eventsUrl()),
       getJSON(API.alerts),
     ]);
     state.lastGood = { health, plant, events, alerts };
-    state.degraded = false;
 
     if (health.degraded_visibility) {
       setBanner(
@@ -272,18 +408,22 @@ async function refresh() {
     renderPlant(plant);
     renderEvents(events);
     renderAlerts(alerts);
+    updateAlertBadge(alerts);
   } catch (err) {
-    // Keep last-known values on screen; surface the degraded state.
     markDegraded(err.message);
     if (state.lastGood) {
       renderPlant(state.lastGood.plant);
       renderEvents(state.lastGood.events);
       renderAlerts(state.lastGood.alerts);
+      updateAlertBadge(state.lastGood.alerts);
     }
   }
 }
 
 function start() {
+  setupTabs();
+  setupAlertFilter();
+  setupEventFilter();
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
   loadScenarios();
   refresh();

@@ -1,12 +1,15 @@
 """Tests for the SafeCO operator dashboard.
 
-The dashboard is a plain, local, advisory operator page. These tests pin the
-route wiring and the design constraints agreed for it: served from the app,
-wired to the real API endpoints, white background, and no gradients or implied
-automatic action.
+The dashboard is a local, advisory operator console with tabbed views for each
+concern (plant, alerts, events, scenarios). These tests pin the route wiring, the
+tabbed structure, and the design constraints: served from the app, wired to the
+real API endpoints, white content background, a flat multi-colour palette (no
+gradients), and no implied automatic action.
 """
 
 from __future__ import annotations
+
+import re
 
 from fastapi.testclient import TestClient
 
@@ -31,6 +34,22 @@ def test_dashboard_index_is_served() -> None:
         "scenario-controls",
     ):
         assert f'id="{element_id}"' in body
+
+
+def test_dashboard_has_tabbed_navigation() -> None:
+    """The console exposes tabbed views, not one flat API dump."""
+    body = client.get("/").text
+    for view in ("plant", "alerts", "events", "scenarios"):
+        assert f'data-tab="{view}"' in body
+    # A tab panel per view so navigation has something to show/hide.
+    for view in ("plant", "alerts", "events", "scenarios"):
+        assert f'data-panel="{view}"' in body
+
+
+def test_dashboard_script_supports_tab_switching() -> None:
+    """The client wires tab navigation."""
+    script = client.get("/static/app.js").text
+    assert "data-tab" in script
 
 
 def test_dashboard_script_calls_the_real_api() -> None:
@@ -64,10 +83,16 @@ def test_dashboard_never_implies_automatic_action() -> None:
         assert forbidden not in body
 
 
-def test_dashboard_styles_are_plain() -> None:
-    """Design constraint: white background, no gradients."""
-    css = client.get("/static/styles.css")
-    assert css.status_code == 200
-    text = css.text.lower()
-    assert "gradient" not in text
-    assert "#fff" in text or "#ffffff" in text or "white" in text
+def test_dashboard_styles_are_plain_but_colourful() -> None:
+    """White content background and no gradients, but a flat multi-colour palette.
+
+    Severity/status colours and a tab accent are expected — a broader palette than
+    plain grayscale, still using flat solid fills only.
+    """
+    css = client.get("/static/styles.css").text
+    lower = css.lower()
+    assert "gradient" not in lower
+    assert "#fff" in lower or "#ffffff" in lower or "white" in lower
+    # A few more colours than plain grayscale: expect several distinct hex codes.
+    hexes = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}", css)}
+    assert len(hexes) >= 6, f"expected a broader palette, found {sorted(hexes)}"
