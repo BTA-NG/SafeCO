@@ -114,6 +114,18 @@ def test_events_for_scenario_is_deterministic(tmp_path):
     ]
 
 
+def test_evaluation_trace_timestamps_are_deterministic_and_monotonic(tmp_path):
+    first = events_for_scenario(
+        "extended_normal_01", seed=42, database=tmp_path / "a.db"
+    )
+    second = events_for_scenario(
+        "extended_normal_01", seed=42, database=tmp_path / "b.db"
+    )
+    first_timestamps = [event.timestamp for event in first.events]
+    assert first_timestamps == [event.timestamp for event in second.events]
+    assert first_timestamps == sorted(first_timestamps)
+
+
 def test_held_out_evaluation_runs_without_tuning_scenarios():
     report = evaluate_scenarios(HELD_OUT_SCENARIOS)
     assert {result.scenario_id for result in report.scenarios} == set(

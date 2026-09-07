@@ -12,7 +12,8 @@ import argparse
 import json
 import tempfile
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -148,6 +149,15 @@ def _is_actionable(alert: Alert) -> bool:
     return SEVERITY_RANK[Severity(alert.severity)] > SEVERITY_RANK[Severity.LOW]
 
 
+_TRACE_EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
+"""Synthetic epoch for deterministic evaluation timestamps.
+
+Evaluation traces must be seed-reproducible; wall-clock timestamps are not
+and can invert under clock adjustment (a phantom ``STALE_TIMESTAMP``
+false positive on benign scenarios).
+"""
+
+
 def events_for_scenario(
     scenario_id: str,
     seed: int = 42,
@@ -190,7 +200,8 @@ def events_for_scenario(
             source="attacker" if scenario_id in ATTACK_SCENARIOS else "scheduler",
             ground_truth=ground_truth,
         )
-        events.append(event)
+        stamped = _TRACE_EPOCH + timedelta(seconds=elapsed_s)
+        events.append(replace(event, timestamp=stamped.isoformat()))
         event_elapsed_s.append(elapsed_s)
 
     simulator.on_command = collect

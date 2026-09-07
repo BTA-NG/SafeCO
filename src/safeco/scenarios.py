@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 import sys
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -25,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from .plant import OperatingMode, PowerSource, Register
 from .simulator import CommandRecord, PlantSimulator
 
-GENERATOR_VERSION = "safeco-scenarios/1.1"
+GENERATOR_VERSION = "safeco-scenarios/1.2"
 """Version tag recorded in every ``ScenarioResult`` for dataset provenance."""
 
 GROUND_TRUTH: dict[str, str] = {
@@ -45,6 +46,27 @@ Scenarios not listed default to ``"normal"``.
 
 Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
 """A single scenario step: ``(phase_name, duration_seconds, action_or_None)``."""
+
+SENSOR_SPIKE = "sensor_spike"
+DURATION_JITTER = "duration_jitter"
+SETPOINT_NUDGE = "setpoint_nudge"
+"""Benign-anomaly kinds understood by ``_execute``."""
+
+Anomaly = tuple[str, str, dict]
+"""One benign perturbation: ``(phase_prefix, kind, params)``.
+
+Kinds and params:
+
+- ``sensor_spike``: ``{"match": str, "field": str, "magnitude": float,
+  "holds": int}`` — perturb an observed telemetry field for a few steps.
+- ``duration_jitter``: ``{"match": str, "fraction": float}`` — vary a
+  step's simulated duration by up to ``fraction``.
+- ``setpoint_nudge``: ``{"match": str, "delta": float, "holds": int}`` —
+  offset the observed target level for a few self-correcting steps.
+"""
+
+AnomalyPlan = list[Anomaly]
+"""Ordered benign-perturbation schedule applied by the scenario executor."""
 
 
 @dataclass
@@ -123,6 +145,7 @@ def _execute(
     ground_truth: str = "normal",
     on_command=None,
     on_snapshot=None,
+    anomaly_plan: AnomalyPlan | None = None,
 ) -> ScenarioResult:
     """Execute a list of steps against a fresh simulator and collect results.
 
@@ -133,6 +156,8 @@ def _execute(
         ground_truth: Ground-truth label for the resulting ``ScenarioResult``.
         on_command: Optional callback invoked with each ``CommandRecord``.
         on_snapshot: Optional callback invoked with each snapshot dict.
+        anomaly_plan: Optional benign-perturbation schedule. ``None`` or an
+            empty plan reproduces the base scenario exactly.
 
     Returns:
         A populated ``ScenarioResult`` containing all commands, snapshots,
@@ -142,17 +167,94 @@ def _execute(
     sim = PlantSimulator(seed=seed)
     sim.on_command = on_command
     result = ScenarioResult(scenario_id, seed, ground_truth=ground_truth)
+    anomaly_rng = _anomaly_rng(seed, scenario_id) if anomaly_plan else None
+    counters = [0] * len(anomaly_plan or [])
     for phase, seconds, action in steps:
+        step_seconds = _perturbed_duration(phase, seconds, anomaly_plan, anomaly_rng)
         if action is not None:
             action(sim)
-        result.violations.append(sim.step(seconds))
+        result.violations.append(sim.step(step_seconds))
         snap = sim.snapshot()
         snap["phase"] = phase
+        snap = _perturbed_observed(snap, phase, anomaly_plan, counters)
         result.snapshots.append(snap)
         if on_snapshot is not None:
             on_snapshot(snap)
     result.commands.extend(sim.commands)
     return result
+
+
+def _anomaly_rng(seed: int, scenario_id: str) -> random.Random:
+    """Return the scenario anomaly RNG, seeded to keep runs reproducible."""
+    return random.Random(f"{seed}:{scenario_id}:{GENERATOR_VERSION}")
+
+
+def _perturbed_duration(
+    phase: str,
+    seconds: float,
+    plan: AnomalyPlan | None,
+    rng: random.Random | None,
+) -> float:
+    """Return the step duration after any benign duration jitter."""
+    if not plan:
+        return seconds
+    step_seconds = seconds
+    for _, (key, kind, params) in enumerate(plan):
+        if phase.startswith(key) and kind == DURATION_JITTER:
+            step_seconds = _apply_duration_jitter(step_seconds, params, rng)
+    return step_seconds
+
+
+def _perturbed_observed(
+    snapshot: dict,
+    phase: str,
+    plan: AnomalyPlan | None,
+    counters: list[int],
+) -> dict:
+    """Return the observed snapshot after benign telemetry perturbations.
+
+    Perturbations apply to a copy only; the true ``PlantState`` is never
+    mutated, so invariant checks cannot trip on a sensor artifact.
+    """
+    if not plan:
+        return snapshot
+    observed = snapshot
+    for index, (key, kind, params) in enumerate(plan):
+        if not phase.startswith(key):
+            continue
+        if kind == SENSOR_SPIKE and counters[index] < params["holds"]:
+            observed = _apply_sensor_spike(observed, params)
+            counters[index] += 1
+        elif kind == SETPOINT_NUDGE and counters[index] < params["holds"]:
+            observed = _apply_setpoint_nudge(observed, params)
+            counters[index] += 1
+    return observed
+
+
+def _apply_duration_jitter(
+    seconds: float,
+    params: dict,
+    rng: random.Random,
+) -> float:
+    """Return ``seconds`` varied deterministically by ``params["fraction"]``."""
+    fraction = params["fraction"]
+    factor = 1.0 + fraction * (2.0 * rng.random() - 1.0)
+    return seconds * factor
+
+
+def _apply_sensor_spike(snapshot: dict, params: dict) -> dict:
+    """Return an observed-snapshot copy with telemetry spiked by magnitude."""
+    field = params["field"]
+    observed = dict(snapshot)
+    observed[field] = observed[field] + params["magnitude"]
+    return observed
+
+
+def _apply_setpoint_nudge(snapshot: dict, params: dict) -> dict:
+    """Return an observed-snapshot copy with the target level nudged by delta."""
+    observed = dict(snapshot)
+    observed["target_level"] = observed["target_level"] + params["delta"]
+    return observed
 
 
 NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
@@ -161,7 +263,12 @@ ATTACK_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}
 
 
 def run_scenario(
-    name: str, seed: int = 42, *, on_command=None, on_snapshot=None
+    name: str,
+    seed: int = 42,
+    *,
+    on_command=None,
+    on_snapshot=None,
+    anomaly_plan: AnomalyPlan | None = None,
 ) -> ScenarioResult:
     """Run a named scenario from the ``NORMAL_SCENARIOS`` registry.
 
@@ -170,6 +277,8 @@ def run_scenario(
         seed: Random seed for reproducibility.
         on_command: Optional callback invoked with each ``CommandRecord``.
         on_snapshot: Optional callback invoked with each snapshot dict.
+        anomaly_plan: Optional benign-perturbation schedule forwarded to
+            ``_execute``.
 
     Returns:
         A populated ``ScenarioResult``.
@@ -181,6 +290,7 @@ def run_scenario(
     scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
     if name not in scenarios:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
+    plan = anomaly_plan if anomaly_plan is not None else ANOMALY_PLANS.get(name)
     return _execute(
         name,
         seed,
@@ -188,6 +298,7 @@ def run_scenario(
         ground_truth=GROUND_TRUTH.get(name, "normal"),
         on_command=on_command,
         on_snapshot=on_snapshot,
+        anomaly_plan=plan,
     )
 
 
@@ -457,6 +568,74 @@ NORMAL_SCENARIOS.update(
         "grid_recovery_01": grid_recovery_steps,
         "maintenance_01": maintenance_steps,
         "extended_normal_01": extended_normal_steps,
+    }
+)
+
+
+def benign_spike_steps() -> list[Step]:
+    """Build a sensor-spike scenario: a transient tank-level blip that recovers."""
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("pressurize", 3.0, None),
+        ("spike_a", 1.0, None),
+        ("spike_b", 1.0, None),
+        ("settle_c", 3.0, None),
+        ("settle_d", 3.0, None),
+    ]
+
+
+def benign_duty_jitter_steps() -> list[Step]:
+    """Build a demand scenario with slightly varied drain/fill durations."""
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(3):
+        steps.append(
+            (f"drain_{i}", 8.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0))
+        )
+        steps.append(
+            (f"fill_{i}", 12.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1))
+        )
+    return steps
+
+
+def benign_setpoint_nudge_steps() -> list[Step]:
+    """Build a self-correcting setpoint scenario: an observed target blip."""
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("nudge_a", 2.0, None),
+        ("nudge_b", 2.0, None),
+        ("restore_a", 2.0, None),
+        ("restore_b", 2.0, None),
+    ]
+
+
+ANOMALY_PLANS: dict[str, AnomalyPlan] = {
+    "benign_spike_01": [
+        (
+            "spike",
+            SENSOR_SPIKE,
+            {"field": "tank_level", "magnitude": 3.0, "holds": 2},
+        )
+    ],
+    "benign_duty_jitter_01": [
+        ("drain", DURATION_JITTER, {"fraction": 0.15}),
+        ("fill", DURATION_JITTER, {"fraction": 0.15}),
+    ],
+    "benign_setpoint_nudge_01": [("nudge", SETPOINT_NUDGE, {"delta": 0.5, "holds": 1})],
+}
+"""Benign-perturbation schedule per scenario.
+
+``run_scenario`` applies these automatically unless an explicit plan is
+passed. The evaluation harness replays raw steps today, so it sees clean
+traces; hook ``ANOMALY_PLANS`` there when baseline metrics must exercise
+the anomalies (a Joseph/Daniel follow-up).
+"""
+
+
+NORMAL_SCENARIOS.update(
+    {
+        "benign_spike_01": benign_spike_steps,
+        "benign_duty_jitter_01": benign_duty_jitter_steps,
+        "benign_setpoint_nudge_01": benign_setpoint_nudge_steps,
     }
 )
 
