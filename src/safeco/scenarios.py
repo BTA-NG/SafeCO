@@ -237,12 +237,17 @@ def _apply_duration_jitter(
     rng: random.Random,
 ) -> float:
     """Return ``seconds`` varied deterministically by ``params["fraction"]``."""
-    raise NotImplementedError("task 4")
+    fraction = params["fraction"]
+    factor = 1.0 + fraction * (2.0 * rng.random() - 1.0)
+    return seconds * factor
 
 
 def _apply_sensor_spike(snapshot: dict, params: dict) -> dict:
     """Return an observed-snapshot copy with telemetry spiked by magnitude."""
-    raise NotImplementedError("task 4")
+    field = params["field"]
+    observed = dict(snapshot)
+    observed[field] = observed[field] + params["magnitude"]
+    return observed
 
 
 def _apply_setpoint_nudge(snapshot: dict, params: dict) -> dict:

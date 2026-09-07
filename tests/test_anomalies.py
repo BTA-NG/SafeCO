@@ -1,6 +1,14 @@
 """Tests for benign-anomaly scenarios and the anomaly execution path."""
 
-from safeco.scenarios import NORMAL_SCENARIOS, run_scenario, scenario_fingerprint
+import random
+
+from safeco.scenarios import (
+    NORMAL_SCENARIOS,
+    _apply_duration_jitter,
+    _apply_sensor_spike,
+    run_scenario,
+    scenario_fingerprint,
+)
 
 
 def test_empty_anomaly_plan_preserves_base_snapshots():
@@ -11,3 +19,51 @@ def test_empty_anomaly_plan_preserves_base_snapshots():
     finally:
         del NORMAL_SCENARIOS["_anom_demo"]
     assert scenario_fingerprint(base) == scenario_fingerprint(anom)
+
+
+def _spike_demo_steps():
+    return [
+        ("pressurize", 1.0, None),
+        ("spike_one", 1.0, None),
+        ("spike_two", 1.0, None),
+        ("settle", 1.0, None),
+    ]
+
+
+def test_duration_jitter_is_deterministic_and_bounded():
+    rng = random.Random(7)
+    draws = [_apply_duration_jitter(10.0, {"fraction": 0.1}, rng) for _ in range(50)]
+    assert all(9.0 <= draw <= 11.0 for draw in draws)
+    second_rng = random.Random(7)
+    second = [
+        _apply_duration_jitter(10.0, {"fraction": 0.1}, second_rng) for _ in range(50)
+    ]
+    assert draws == second
+
+
+def test_sensor_spike_applies_to_observed_copy_only():
+    snapshot = {"tank_level": 50.0, "flow_rate": 1.0, "phase": "spike"}
+    observed = _apply_sensor_spike(snapshot, {"field": "tank_level", "magnitude": 5.0})
+    assert observed is not snapshot
+    assert observed["tank_level"] == 55.0
+    assert snapshot["tank_level"] == 50.0
+    assert observed["flow_rate"] == 1.0
+
+
+def test_sensor_spike_perturbs_observed_and_recovers():
+    NORMAL_SCENARIOS["_spike_demo"] = _spike_demo_steps
+    try:
+        base = run_scenario("_spike_demo", seed=42).snapshots
+        plan = [
+            (
+                "spike",
+                "sensor_spike",
+                {"field": "tank_level", "magnitude": 5.0, "holds": 1},
+            )
+        ]
+        anom = run_scenario("_spike_demo", seed=42, anomaly_plan=plan).snapshots
+    finally:
+        del NORMAL_SCENARIOS["_spike_demo"]
+    assert anom[1]["tank_level"] == base[1]["tank_level"] + 5.0
+    assert anom[2]["tank_level"] == base[2]["tank_level"]
+    assert anom[3]["tank_level"] == base[3]["tank_level"]
