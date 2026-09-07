@@ -1,18 +1,6 @@
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
 from safeco.alerts import ReasonCode, build_alert
-from safeco.app import app
-
-client = TestClient(app)
-
-
-@pytest.fixture()
-def alert_store(api_alert_store):
-    """Alias the shared per-test alert store injected by the autouse fixture."""
-    return api_alert_store
 
 
 def _unsafe_pump_alert(event_id: str = "event-1"):
@@ -23,7 +11,7 @@ def _unsafe_pump_alert(event_id: str = "event-1"):
     )
 
 
-def test_alerts_endpoint_returns_persisted_alerts(alert_store) -> None:
+def test_alerts_endpoint_returns_persisted_alerts(client, alert_store) -> None:
     """The alert feed should serve alerts from the persistent store."""
     alert_store.upsert(_unsafe_pump_alert("event-1"))
 
@@ -38,7 +26,7 @@ def test_alerts_endpoint_returns_persisted_alerts(alert_store) -> None:
     assert payload[0]["evidence"]["tank_level"] == 55.2
 
 
-def test_unacknowledged_alerts_filter(alert_store) -> None:
+def test_unacknowledged_alerts_filter(client, alert_store) -> None:
     """The unacknowledged route should filter the persisted alerts."""
     a = _unsafe_pump_alert("event-1")
     b = build_alert(
@@ -55,14 +43,14 @@ def test_unacknowledged_alerts_filter(alert_store) -> None:
     assert [item["alert_id"] for item in response.json()] == [b.alert_id]
 
 
-def test_missing_alert_returns_404(alert_store) -> None:
+def test_missing_alert_returns_404(client, alert_store) -> None:
     """A missing alert id should return a 404."""
     response = client.get("/api/alerts/not-found")
     assert response.status_code == 404
     assert response.json()["detail"] == "alert not found"
 
 
-def test_acknowledge_alert_persists(alert_store) -> None:
+def test_acknowledge_alert_persists(client, alert_store) -> None:
     """Acknowledgement should persist in the store and survive a re-read."""
     alert = _unsafe_pump_alert("event-1")
     alert_store.upsert(alert)
@@ -75,7 +63,7 @@ def test_acknowledge_alert_persists(alert_store) -> None:
     assert alert_store.get(alert.alert_id)["acknowledged"] is True
 
 
-def test_acknowledge_unknown_alert_returns_404(alert_store) -> None:
+def test_acknowledge_unknown_alert_returns_404(client, alert_store) -> None:
     """Acknowledging an unknown alert should 404, not report false success."""
     response = client.patch("/api/alerts/does-not-exist/ack")
     assert response.status_code == 404

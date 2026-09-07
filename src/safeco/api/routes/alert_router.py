@@ -18,7 +18,7 @@ router = APIRouter(tags=["alerts"])
 
 
 @router.get("/alerts")
-async def list_alerts(
+def list_alerts(
     store: AlertStoreDep,
     limit: int = Query(default=50, ge=1, le=500),
     acknowledged: bool | None = None,
@@ -28,7 +28,7 @@ async def list_alerts(
 
 
 @router.get("/alerts/unacknowledged")
-async def list_unacknowledged_alerts(
+def list_unacknowledged_alerts(
     store: AlertStoreDep,
     limit: int = Query(default=50, ge=1, le=500),
 ) -> list[dict[str, object]]:
@@ -37,7 +37,7 @@ async def list_unacknowledged_alerts(
 
 
 @router.get("/alerts/{alert_id}")
-async def get_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
+def get_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
     """Return a specific alert by id, or 404 if it is not stored."""
     alert = store.get(alert_id)
     if alert is None:
@@ -46,7 +46,7 @@ async def get_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
 
 
 @router.patch("/alerts/{alert_id}/ack")
-async def acknowledge_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
+def acknowledge_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
     """Record an engineer's acknowledgement of an alert.
 
     Validates that the alert exists (404 otherwise) and persists the

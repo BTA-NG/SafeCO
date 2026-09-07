@@ -43,7 +43,7 @@ async def get_scenario(scenario_id: str) -> dict[str, str]:
 
 
 @router.post("/scenarios/{scenario_id}/run")
-async def run_scenario_endpoint(
+def run_scenario_endpoint(
     scenario_id: str,
     store: StoreDep,
     alert_store: AlertStoreDep,

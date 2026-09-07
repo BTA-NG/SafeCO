@@ -1,34 +1,20 @@
 """Tests for the scenario execution endpoint.
 
-Written test-first. Running a scenario through the API must persist its events
-to the event store, run the detector, and persist any alerts to the alert store,
-so the dashboard can show a scenario and its explained findings end to end.
+Running a scenario through the API must persist its events to the event store,
+run the detector, and persist any alerts to the alert store, so the dashboard can
+show a scenario and its explained findings end to end.
 """
 
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
 
-from safeco.app import app
-
-client = TestClient(app)
-
-
-@pytest.fixture()
-def stores(api_stores):
-    """Alias the shared per-test event and alert stores."""
-    return api_stores
-
-
-def test_run_unknown_scenario_returns_404(stores) -> None:
+def test_run_unknown_scenario_returns_404(client) -> None:
     response = client.post("/api/scenarios/does_not_exist/run")
     assert response.status_code == 404
 
 
-def test_run_normal_scenario_persists_events(stores) -> None:
+def test_run_normal_scenario_persists_events(client, event_store) -> None:
     """A normal scenario should persist events and produce no alerts."""
-    event_store, alert_store = stores
     response = client.post("/api/scenarios/startup_01/run", params={"seed": 42})
     assert response.status_code == 200
     body = response.json()
@@ -46,9 +32,8 @@ def test_run_normal_scenario_persists_events(stores) -> None:
     assert len(listed.json()) == body["events"]
 
 
-def test_run_attack_scenario_persists_alerts(stores) -> None:
+def test_run_attack_scenario_persists_alerts(client) -> None:
     """The injection attack (pump start, inlet closed) should raise an alert."""
-    event_store, alert_store = stores
     response = client.post(
         "/api/scenarios/attack_injection_01/run", params={"seed": 42}
     )
@@ -69,14 +54,14 @@ def test_run_attack_scenario_persists_alerts(stores) -> None:
     assert unsafe["acknowledged"] is False
 
 
-def test_run_is_deterministic_on_seed(stores) -> None:
+def test_run_is_deterministic_on_seed(client) -> None:
     """Same seed => same fingerprint, so a judge can reproduce a run."""
     first = client.post("/api/scenarios/startup_01/run", params={"seed": 7}).json()
     second = client.post("/api/scenarios/startup_01/run", params={"seed": 7}).json()
     assert first["fingerprint"] == second["fingerprint"]
 
 
-def test_run_fingerprint_matches_canonical_run_scenario(stores) -> None:
+def test_run_fingerprint_matches_canonical_run_scenario(client) -> None:
     """Guard against execution drift between the endpoint and run_scenario.
 
     The endpoint must execute the scenario identically to
