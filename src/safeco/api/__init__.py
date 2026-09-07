@@ -1,0 +1,1 @@
+"""SafeCO FastAPI package."""

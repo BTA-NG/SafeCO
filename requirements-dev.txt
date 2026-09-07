@@ -1,1 +1,3 @@
 ruff==0.16.4
+# httpx backs fastapi.testclient.TestClient used by the API test suite.
+httpx>=0.28,<0.29
