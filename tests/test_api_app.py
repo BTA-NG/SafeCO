@@ -14,14 +14,13 @@ def test_app_registers_expected_routes() -> None:
     assert "/api/plant/state" in paths
 
 
-def test_app_health_route_is_accessible(api_store) -> None:
-    """The health route should answer promptly against the injected store.
+def test_app_health_route_is_accessible(client) -> None:
+    """The health route should answer promptly through the running lifespan.
 
-    The autouse ``api_store`` fixture injects a temporary event store and
-    overrides the ``get_store`` dependency, so this request never touches the
-    real ``data/safeco.db`` file whose WAL lock could otherwise stall it.
+    The ``client`` fixture runs the app under a context-managed TestClient with
+    the database pinned to a temp path, so the lifespan opens that store and this
+    request never touches the real ``data/safeco.db``.
     """
-    client = TestClient(app)
     response = client.get("/api/health")
     assert response.status_code == 200
 
@@ -34,8 +33,8 @@ def test_lifespan_creates_and_closes_its_own_store(tmp_path, monkeypatch) -> Non
     """
     monkeypatch.setenv("SAFECO_DATABASE", str(tmp_path / "lifespan.db"))
     app.state.store = None
-    with TestClient(app) as client:
+    with TestClient(app) as test_client:
         assert app.state.store is not None
-        assert client.get("/api/health").status_code == 200
+        assert test_client.get("/api/health").status_code == 200
     # Lifespan owns the store here, so it must release it on shutdown.
     assert app.state.store is None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Annotated
 
 from fastapi import Depends
@@ -10,13 +11,17 @@ from safeco.storage import EventStore
 
 
 def _is_open(store: EventStore | None) -> bool:
-    """Return True if the store has a live (non-closed) connection."""
+    """Return True if the store has a live (non-closed) connection.
+
+    A closed sqlite3 connection raises ``ProgrammingError`` on use; that is the
+    signal we reopen on, rather than swallowing every possible error.
+    """
     if store is None:
         return False
     try:
         store.connection.execute("SELECT 1")
         return True
-    except Exception:
+    except sqlite3.ProgrammingError:
         return False
 
 

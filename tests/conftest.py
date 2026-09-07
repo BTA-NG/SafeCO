@@ -1,40 +1,40 @@
 """Shared test fixtures for the SafeCO API.
 
-Every API test runs against a temporary ``EventStore`` injected through
-FastAPI's dependency override, never the real ``data/safeco.db``. The store is
-closed and all app state is cleared after each test, so no connection leaks
-between tests and no test can wedge the suite on a locked production database.
+API tests drive the app through ``TestClient`` used as a context manager, so the
+real FastAPI lifespan runs: it creates the event store on startup and closes it
+on shutdown. The store path is pinned to a temporary database via
+``SAFECO_DATABASE``, so the lifespan never opens the production ``data/safeco.db``
+and no test can wedge the suite on that file's lock. All app state is reset after
+each test, so nothing leaks between tests.
 """
 
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
-from safeco.api.deps import get_store
 from safeco.app import app
-from safeco.storage import EventStore
 
 
-@pytest.fixture(autouse=True)
-def api_store(tmp_path, monkeypatch):
-    """Inject a per-test temporary event store and clean it up afterwards.
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    """Yield a context-managed TestClient backed by a temporary database.
 
-    Yields the store so a test can seed events directly. The same instance is
-    returned by the ``get_store`` dependency and exposed on ``app.state.store``
-    for the code paths that read state without the dependency.
+    Pins ``SAFECO_DATABASE`` to a temp file and clears any injected store so the
+    lifespan owns creation/teardown. Entering the ``with`` block runs startup
+    (opening the temp store); leaving it runs shutdown (closing it). App state is
+    reset afterwards so the next test starts clean.
     """
-    # Belt and braces: even if some path bypasses the override and reads the
-    # configured path, point it away from data/safeco.db.
     monkeypatch.setenv("SAFECO_DATABASE", str(tmp_path / "safeco_test.db"))
-
-    store = EventStore(tmp_path / "api_test.db")
-    app.state.store = store
+    app.state.store = None
     app.state.alerts = []
-    app.dependency_overrides[get_store] = lambda: store
-    try:
-        yield store
-    finally:
-        app.dependency_overrides.pop(get_store, None)
-        store.close()
-        app.state.store = None
-        app.state.alerts = []
+    with TestClient(app) as test_client:
+        yield test_client
+    app.state.store = None
+    app.state.alerts = []
+
+
+@pytest.fixture()
+def event_store(client):
+    """Return the event store the running lifespan created for this client."""
+    return app.state.store

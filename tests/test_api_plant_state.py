@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from safeco.app import app
 from safeco.events import Event, ProcessSnapshot
-
-client = TestClient(app)
 
 
 @pytest.fixture()
-def store_with_event(api_store):
-    """Seed the shared per-test store with one process snapshot."""
-    store = api_store
+def store_with_event(event_store):
+    """Seed the lifespan-created event store with one process snapshot."""
     event = Event(
         scenario_id="maintenance_01",
         ground_truth="maintenance",
@@ -34,11 +29,11 @@ def store_with_event(api_store):
         ),
         sequence_id=1,
     )
-    store.append(event)
-    return store
+    event_store.append(event)
+    return event_store
 
 
-def test_plant_state_returns_latest_snapshot(store_with_event) -> None:
+def test_plant_state_returns_latest_snapshot(client, store_with_event) -> None:
     """The plant-state endpoint should return the newest persisted process state."""
     response = client.get("/api/plant/state")
     assert response.status_code == 200
@@ -50,7 +45,7 @@ def test_plant_state_returns_latest_snapshot(store_with_event) -> None:
     assert payload["process"]["power_source"] == "generator"
 
 
-def test_plant_state_handles_empty_store(api_store) -> None:
+def test_plant_state_handles_empty_store(client, event_store) -> None:
     """An empty store should return a safe no-data response."""
     response = client.get("/api/plant/state")
     assert response.status_code == 200
@@ -59,7 +54,9 @@ def test_plant_state_handles_empty_store(api_store) -> None:
     assert payload["process"] is None
 
 
-def test_plant_state_returns_full_event_contract_shape(store_with_event) -> None:
+def test_plant_state_returns_full_event_contract_shape(
+    client, store_with_event
+) -> None:
     """Plant state should return the full Event contract, not just process dict."""
     response = client.get("/api/plant/state")
     assert response.status_code == 200

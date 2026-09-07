@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
-from safeco.app import app
 from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
-client = TestClient(app)
 
-
-def test_scenario_list_includes_all_scenarios() -> None:
+def test_scenario_list_includes_all_scenarios(client) -> None:
     """The scenario list should return all known scenario IDs."""
     response = client.get("/api/scenarios")
     assert response.status_code == 200
@@ -25,7 +20,7 @@ def test_scenario_list_includes_all_scenarios() -> None:
         assert scenario_id in scenarios
 
 
-def test_scenario_list_sorted_and_complete() -> None:
+def test_scenario_list_sorted_and_complete(client) -> None:
     """The scenario list should be sorted and match the full registry."""
     response = client.get("/api/scenarios")
     assert response.status_code == 200
@@ -35,7 +30,7 @@ def test_scenario_list_sorted_and_complete() -> None:
     assert scenarios == sorted(all_scenarios.keys())
 
 
-def test_scenario_detail_returns_registered_for_known_id() -> None:
+def test_scenario_detail_returns_registered_for_known_id(client) -> None:
     """A known scenario ID should return a registered status."""
     # Pick the first scenario from NORMAL_SCENARIOS
     scenario_id = list(NORMAL_SCENARIOS.keys())[0]
@@ -47,14 +42,14 @@ def test_scenario_detail_returns_registered_for_known_id() -> None:
     assert payload["status"] == "registered"
 
 
-def test_scenario_detail_returns_404_for_unknown_id() -> None:
+def test_scenario_detail_returns_404_for_unknown_id(client) -> None:
     """An unknown scenario ID should return a 404."""
     response = client.get("/api/scenarios/unknown_scenario_xyz")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
 
-def test_scenario_detail_validates_attack_scenarios() -> None:
+def test_scenario_detail_validates_attack_scenarios(client) -> None:
     """Attack scenario IDs should also be valid and return registered."""
     # Pick the first scenario from ATTACK_SCENARIOS
     scenario_id = list(ATTACK_SCENARIOS.keys())[0]

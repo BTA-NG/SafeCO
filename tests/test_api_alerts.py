@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from safeco.app import app
 
-client = TestClient(app)
 
-
-def test_alerts_endpoint_returns_in_memory_alerts() -> None:
+def test_alerts_endpoint_returns_in_memory_alerts(client) -> None:
     """The alert feed should serve the in-memory alert state managed by the app."""
     app.state.alerts = [
         {"alert_id": "alert-1", "event_id": "event-1", "acknowledged": False},
@@ -21,7 +17,7 @@ def test_alerts_endpoint_returns_in_memory_alerts() -> None:
     assert payload[0]["alert_id"] == "alert-1"
 
 
-def test_unacknowledged_alerts_filter_on_acknowledged_flag() -> None:
+def test_unacknowledged_alerts_filter_on_acknowledged_flag(client) -> None:
     """The unacknowledged route should filter the in-memory alerts."""
     app.state.alerts = [
         {"alert_id": "alert-1", "event_id": "event-1", "acknowledged": False},
@@ -34,7 +30,7 @@ def test_unacknowledged_alerts_filter_on_acknowledged_flag() -> None:
     assert [item["alert_id"] for item in payload] == ["alert-1"]
 
 
-def test_missing_alert_returns_404() -> None:
+def test_missing_alert_returns_404(client) -> None:
     """A missing alert id should return a 404 until alert persistence exists."""
     app.state.alerts = []
 
@@ -43,7 +39,7 @@ def test_missing_alert_returns_404() -> None:
     assert response.json()["detail"] == "alert not found"
 
 
-def test_acknowledge_alert_updates_in_memory_state() -> None:
+def test_acknowledge_alert_updates_in_memory_state(client) -> None:
     """The acknowledgement endpoint should update the in-memory alert state."""
     app.state.alerts = [
         {"alert_id": "test-alert", "event_id": "event-1", "acknowledged": False}

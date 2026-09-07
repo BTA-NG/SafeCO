@@ -1,21 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-
-from safeco.app import app
 from safeco.events import Event, ProcessSnapshot
 
-client = TestClient(app)
 
-
-@pytest.fixture()
-def event_store(api_store):
-    """Alias the shared per-test store injected by the autouse fixture."""
-    return api_store
-
-
-def test_event_list_returns_recent_rows(event_store) -> None:
+def test_event_list_returns_recent_rows(client, event_store) -> None:
     """The event feed should return the newest persisted events."""
     first = Event(
         scenario_id="normal_running_01",
@@ -49,7 +37,7 @@ def test_event_list_returns_recent_rows(event_store) -> None:
     assert rows[0]["event_id"] == second.event_id
 
 
-def test_event_detail_returned_by_event_id(event_store) -> None:
+def test_event_detail_returned_by_event_id(client, event_store) -> None:
     """The detailed event endpoint should return one event row."""
     event = Event(
         scenario_id="attack_01",
@@ -71,13 +59,13 @@ def test_event_detail_returned_by_event_id(event_store) -> None:
     assert payload["scenario_id"] == "attack_01"
 
 
-def test_event_detail_returns_404_for_missing_event(event_store) -> None:
+def test_event_detail_returns_404_for_missing_event(client, event_store) -> None:
     """A missing event id should return a 404."""
     response = client.get("/api/events/does-not-exist")
     assert response.status_code == 404
 
 
-def test_events_after_returns_later_rows(event_store) -> None:
+def test_events_after_returns_later_rows(client, event_store) -> None:
     """The after-event feed should return only events newer than the supplied id."""
     first = Event(
         scenario_id="normal_running_01",
@@ -111,7 +99,7 @@ def test_events_after_returns_later_rows(event_store) -> None:
     assert rows[0]["event_id"] == second.event_id
 
 
-def test_event_list_returns_event_contract_shape(event_store) -> None:
+def test_event_list_returns_event_contract_shape(client, event_store) -> None:
     """Event list responses must include properly deserialized Event fields.
 
     The process field must be a dict with ProcessSnapshot shape, not a JSON string.
@@ -158,7 +146,7 @@ def test_event_list_returns_event_contract_shape(event_store) -> None:
     assert returned["sequence_id"] == 1
 
 
-def test_event_detail_returns_event_contract_shape(event_store) -> None:
+def test_event_detail_returns_event_contract_shape(client, event_store) -> None:
     """Individual event responses must deserialize value and process fields.
 
     This ensures the Event contract is honored for detail lookups.
@@ -190,7 +178,7 @@ def test_event_detail_returns_event_contract_shape(event_store) -> None:
     assert returned["process"]["valve_state"] == "closed"
 
 
-def test_events_after_returns_event_contract_shape(event_store) -> None:
+def test_events_after_returns_event_contract_shape(client, event_store) -> None:
     """Events after a marker must also have deserialized Event fields.
 
     This ensures consistency across all event feed endpoints.
