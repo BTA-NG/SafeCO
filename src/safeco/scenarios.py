@@ -252,7 +252,9 @@ def _apply_sensor_spike(snapshot: dict, params: dict) -> dict:
 
 def _apply_setpoint_nudge(snapshot: dict, params: dict) -> dict:
     """Return an observed-snapshot copy with the target level nudged by delta."""
-    raise NotImplementedError("task 5")
+    observed = dict(snapshot)
+    observed["target_level"] = observed["target_level"] + params["delta"]
+    return observed
 
 
 NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
@@ -288,6 +290,7 @@ def run_scenario(
     scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
     if name not in scenarios:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
+    plan = anomaly_plan if anomaly_plan is not None else ANOMALY_PLANS.get(name)
     return _execute(
         name,
         seed,
@@ -295,7 +298,7 @@ def run_scenario(
         ground_truth=GROUND_TRUTH.get(name, "normal"),
         on_command=on_command,
         on_snapshot=on_snapshot,
-        anomaly_plan=anomaly_plan,
+        anomaly_plan=plan,
     )
 
 
@@ -565,6 +568,74 @@ NORMAL_SCENARIOS.update(
         "grid_recovery_01": grid_recovery_steps,
         "maintenance_01": maintenance_steps,
         "extended_normal_01": extended_normal_steps,
+    }
+)
+
+
+def benign_spike_steps() -> list[Step]:
+    """Build a sensor-spike scenario: a transient tank-level blip that recovers."""
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("pressurize", 3.0, None),
+        ("spike_a", 1.0, None),
+        ("spike_b", 1.0, None),
+        ("settle_c", 3.0, None),
+        ("settle_d", 3.0, None),
+    ]
+
+
+def benign_duty_jitter_steps() -> list[Step]:
+    """Build a demand scenario with slightly varied drain/fill durations."""
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(3):
+        steps.append(
+            (f"drain_{i}", 8.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0))
+        )
+        steps.append(
+            (f"fill_{i}", 12.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1))
+        )
+    return steps
+
+
+def benign_setpoint_nudge_steps() -> list[Step]:
+    """Build a self-correcting setpoint scenario: an observed target blip."""
+    return [
+        ("configure_running", 1.0, _configure_running),
+        ("nudge_a", 2.0, None),
+        ("nudge_b", 2.0, None),
+        ("restore_a", 2.0, None),
+        ("restore_b", 2.0, None),
+    ]
+
+
+ANOMALY_PLANS: dict[str, AnomalyPlan] = {
+    "benign_spike_01": [
+        (
+            "spike",
+            SENSOR_SPIKE,
+            {"field": "tank_level", "magnitude": 3.0, "holds": 2},
+        )
+    ],
+    "benign_duty_jitter_01": [
+        ("drain", DURATION_JITTER, {"fraction": 0.15}),
+        ("fill", DURATION_JITTER, {"fraction": 0.15}),
+    ],
+    "benign_setpoint_nudge_01": [("nudge", SETPOINT_NUDGE, {"delta": 0.5, "holds": 1})],
+}
+"""Benign-perturbation schedule per scenario.
+
+``run_scenario`` applies these automatically unless an explicit plan is
+passed. The evaluation harness replays raw steps today, so it sees clean
+traces; hook ``ANOMALY_PLANS`` there when baseline metrics must exercise
+the anomalies (a Joseph/Daniel follow-up).
+"""
+
+
+NORMAL_SCENARIOS.update(
+    {
+        "benign_spike_01": benign_spike_steps,
+        "benign_duty_jitter_01": benign_duty_jitter_steps,
+        "benign_setpoint_nudge_01": benign_setpoint_nudge_steps,
     }
 )
 

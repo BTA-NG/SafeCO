@@ -67,3 +67,52 @@ def test_sensor_spike_perturbs_observed_and_recovers():
     assert anom[1]["tank_level"] == base[1]["tank_level"] + 5.0
     assert anom[2]["tank_level"] == base[2]["tank_level"]
     assert anom[3]["tank_level"] == base[3]["tank_level"]
+
+
+BENIGN_ANOMALY_SCENARIOS = (
+    "benign_spike_01",
+    "benign_duty_jitter_01",
+    "benign_setpoint_nudge_01",
+)
+
+
+def test_benign_anomaly_scenarios_are_registered_as_normal():
+    assert set(BENIGN_ANOMALY_SCENARIOS) <= set(NORMAL_SCENARIOS)
+    for scenario_id in BENIGN_ANOMALY_SCENARIOS:
+        assert run_scenario(scenario_id, seed=42).ground_truth == "normal"
+
+
+def test_benign_anomaly_scenarios_have_no_invariant_violations():
+    for scenario_id in BENIGN_ANOMALY_SCENARIOS:
+        result = run_scenario(scenario_id, seed=42)
+        assert all(v == [] for v in result.violations)
+
+
+def test_benign_anomaly_scenarios_are_deterministic_from_seed():
+    for scenario_id in BENIGN_ANOMALY_SCENARIOS:
+        a = scenario_fingerprint(run_scenario(scenario_id, seed=42))
+        b = scenario_fingerprint(run_scenario(scenario_id, seed=42))
+        assert a == b
+        assert a != scenario_fingerprint(run_scenario(scenario_id, seed=43))
+
+
+def test_spike_is_visible_in_observed_data_and_self_restores():
+    base = run_scenario("benign_spike_01", seed=42, anomaly_plan=[]).snapshots
+    anom = run_scenario("benign_spike_01", seed=42).snapshots
+    deviations = [
+        s["tank_level"] - b["tank_level"]
+        for b, s in zip(base, anom, strict=True)
+        if s["tank_level"] != b["tank_level"]
+    ]
+    assert deviations
+    assert all(deviation > 0 for deviation in deviations)
+    assert anom[-1]["tank_level"] == base[-1]["tank_level"]
+
+
+def test_setpoint_nudge_self_corrects():
+    base = run_scenario("benign_setpoint_nudge_01", seed=42, anomaly_plan=[]).snapshots
+    anom = run_scenario("benign_setpoint_nudge_01", seed=42).snapshots
+    base_targets = [s["target_level"] for s in base]
+    anom_targets = [s["target_level"] for s in anom]
+    assert any(t != b for t, b in zip(anom_targets, base_targets, strict=True))
+    assert anom_targets[-1] == base_targets[-1] == 70.0
