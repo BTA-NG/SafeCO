@@ -15,7 +15,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-async def health_status(store: StoreDep) -> dict[str, object]:
+def health_status(store: StoreDep) -> dict[str, object]:
     """Report the current local SafeCO status.
 
     The dashboard uses this endpoint to decide whether the local collection feed

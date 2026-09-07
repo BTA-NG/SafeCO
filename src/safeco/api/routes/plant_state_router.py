@@ -15,7 +15,7 @@ router = APIRouter(tags=["plant"])
 
 
 @router.get("/plant/state")
-async def plant_state(store: StoreDep) -> dict[str, object]:
+def plant_state(store: StoreDep) -> dict[str, object]:
     """Return the latest process snapshot from the persisted event stream.
 
     The response includes the full Event contract shape, including all event

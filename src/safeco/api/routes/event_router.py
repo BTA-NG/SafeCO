@@ -57,7 +57,7 @@ def _row_to_event(row: sqlite3.Row) -> Event:
 
 
 @router.get("/events")
-async def list_events(
+def list_events(
     limit: int = Query(default=50, ge=1, le=500),
     scenario_id: str | None = None,
     store: StoreDep = None,
@@ -74,7 +74,7 @@ async def list_events(
 
 
 @router.get("/events/{event_id}")
-async def get_event(event_id: str, store: StoreDep = None) -> dict[str, object]:
+def get_event(event_id: str, store: StoreDep = None) -> dict[str, object]:
     """Return a single event by its UUID-style identifier.
 
     The returned event includes all Event contract fields with value and process
@@ -88,7 +88,7 @@ async def get_event(event_id: str, store: StoreDep = None) -> dict[str, object]:
 
 
 @router.get("/events/after/{event_id}")
-async def get_events_after(
+def get_events_after(
     event_id: str,
     limit: int = Query(default=50, ge=1, le=500),
     store: StoreDep = None,

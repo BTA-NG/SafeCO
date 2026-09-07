@@ -1,19 +1,48 @@
 """Regression guard for the TestClient/lifespan/shared-store hang.
 
-A clean-environment run of the API test modules previously wedged at the health
-route because the app opened the real ``data/safeco.db`` on first request and
-blocked on its WAL lock. These tests drive the request path the API modules use
-— through the running lifespan, in this process — and assert the endpoints answer
-promptly, so the regression fails loudly instead of hanging the whole suite.
+The reported symptom: in a clean checkout the suite stalls at the health route,
+and even a minimal ``TestClient(app).get("/api/health")`` never returns — even
+with a temporary ``EventStore`` injected, so it is not the production database.
 
-This is a guard, not the fix: the fix is that the lifespan opens a temporary
-store (never ``data/safeco.db``) and closes it deterministically. The timing
-assertion is generous and only catches a true stall, never normal latency.
+Root cause: the DB-backed routes were ``async def`` but made blocking SQLite
+calls, so the work ran on the event loop. Under TestClient's single-threaded
+portal loop that parks the only thread available to deliver the response, which
+presents as a hang on some event-loop/OS combinations. The fix makes those
+handlers synchronous so Starlette runs them in its threadpool, keeping the loop
+free. These tests drive both the reviewer's exact minimal repro and the
+context-managed path, and assert prompt completion without touching
+``data/safeco.db``.
 """
 
 from __future__ import annotations
 
 import time
+
+from fastapi.testclient import TestClient
+
+from safeco.app import app
+from safeco.storage import EventStore
+
+
+def test_bare_testclient_health_returns_promptly(tmp_path, monkeypatch) -> None:
+    """Mirror the reviewer's minimal repro: bare client, injected temp store.
+
+    No context manager, an injected temporary EventStore, and SAFECO_DATABASE
+    pointed away from data/safeco.db. The request must return quickly.
+    """
+    monkeypatch.setenv("SAFECO_DATABASE", str(tmp_path / "unused.db"))
+    store = EventStore(tmp_path / "injected.db")
+    app.state.store = store
+    app.state.alerts = []
+    try:
+        start = time.perf_counter()
+        response = TestClient(app).get("/api/health")
+        elapsed = time.perf_counter() - start
+        assert response.status_code == 200
+        assert elapsed < 5.0, f"health took {elapsed:.2f}s — possible hang"
+    finally:
+        store.close()
+        app.state.store = None
 
 
 def test_health_endpoint_returns_promptly(client) -> None:
@@ -22,8 +51,6 @@ def test_health_endpoint_returns_promptly(client) -> None:
     response = client.get("/api/health")
     elapsed = time.perf_counter() - start
     assert response.status_code == 200
-    # A healthy call is milliseconds; the previous hang exceeded 15s. Five
-    # seconds cleanly separates "working" from "stalled" without being flaky.
     assert elapsed < 5.0, f"health endpoint took {elapsed:.2f}s — possible hang"
 
 
