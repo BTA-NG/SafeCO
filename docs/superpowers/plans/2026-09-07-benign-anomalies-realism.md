@@ -10,6 +10,8 @@
 
 **Branch:** `feature/benign-anomalies-realism` (per CONTRIBUTING.md `feature/<short-description>`)
 
+**Fold-in (pre-existing upstream flake):** `STALE_TIMESTAMP` fires nondeterministically on benign scenarios because `Event.timestamp` defaults to wall clock (`events.py:37`) and the detector compares adjacent timestamps (`detector.py:428-446`). Fix is Task 2: stamp evaluation traces with scenario-derived timestamps inside `evaluation.py` only — zero shared-contract change. Flag in PR body for Joseph/Daniel.
+
 ## Global Constraints (from AGENTS.md / context.md / team_handoff.md)
 
 - Line length 88; ruff rule sets E/W, F, I, N, B, D. Run `.venv/bin/ruff check src tests` and `.venv/bin/ruff format --check src tests`.
@@ -54,7 +56,49 @@
 
 ---
 
-### Task 2: Anomaly model + executor plumbing
+### Task 2: Deterministic evaluation timestamps (upstream flake fix)
+
+**Files:**
+- Modify: `src/safeco/evaluation.py` (module import; `collect()` at :186-195)
+- Test: `tests/test_evaluation.py`
+
+**Interfaces:**
+- Consumes: `events_for_scenario`, `Event.to_dict()`, existing `elapsed_s` accounting (stamped at command time, matching `event_elapsed_s`).
+- Produces: module constant `_TRACE_EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)`; traces whose `Event.timestamp` is scenario-derived, strictly monotonic, reproducible per `(scenario, seed)` matrix.
+
+- [ ] **Step 1: Write the failing regression test**
+```python
+def test_evaluation_trace_timestamps_are_deterministic_and_monotonic(tmp_path):
+    first = events_for_scenario("extended_normal_01", seed=42, database=tmp_path / "a.db")
+    second = events_for_scenario("extended_normal_01", seed=42, database=tmp_path / "b.db")
+    t1 = [e.timestamp for e in first.events]
+    assert t1 == [e.timestamp for e in second.events]
+    assert t1 == sorted(t1)
+```
+- [ ] **Step 2:** Run — expected FAIL on `sorted(t1)` when the wall clock steps back.
+- [ ] **Step 3:** Implement:
+```python
+from datetime import datetime, timedelta, timezone
+...
+_TRACE_EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def collect(command) -> None:
+        event = collector.record_simulator_command(
+            simulator,
+            command,
+            source="attacker" if scenario_id in ATTACK_SCENARIOS else "scheduler",
+            ground_truth=ground_truth,
+        )
+        stamped = _TRACE_EPOCH + timedelta(seconds=elapsed_s)
+        events.append(Event(**{**event.to_dict(), "timestamp": stamped.isoformat()}))
+        event_elapsed_s.append(elapsed_s)
+```
+- [ ] **Step 4:** Run `pytest tests/test_evaluation.py -q` — expected all pass, deterministic `precision == 1.0`.
+- [ ] **Step 5:** Commit `fix(evaluation): stamp scenario-derived timestamps, remove wall-clock flake`
+
+---
+
+### Task 3: Anomaly model + executor plumbing
 
 **Files:**
 - Modify: `src/safeco/scenarios.py` (add anomaly types near line 43; extend run_scenario/_execute at 115-188)
@@ -86,7 +130,7 @@ def test_empty_anomaly_plan_preserves_base_snapshots():
 
 ---
 
-### Task 3: Sensor-spike / duty-jitter anomaly kinds
+### Task 4: Sensor-spike / duty-jitter anomaly kinds
 
 **Files:**
 - Modify: `src/safeco/scenarios.py`
@@ -116,7 +160,7 @@ def test_sensor_spike_invariant_safe():
 
 ---
 
-### Task 4: Setpoint-nudge kind + register the three benign scenarios
+### Task 5: Setpoint-nudge kind + register the three benign scenarios
 
 **Files:**
 - Modify: `src/safeco/scenarios.py`
@@ -139,7 +183,7 @@ def test_sensor_spike_invariant_safe():
 
 ---
 
-### Task 5: Provenance bump + fingerprint determinism
+### Task 6: Provenance bump + fingerprint determinism
 
 **Files:**
 - Modify: `src/safeco/scenarios.py:28` (`GENERATOR_VERSION`)
@@ -157,7 +201,7 @@ def test_sensor_spike_invariant_safe():
 
 ---
 
-### Task 6: Process-realism evidence module (`realism.py`)
+### Task 7: Process-realism evidence module (`realism.py`)
 
 **Files:**
 - Create: `src/safeco/realism.py`
@@ -168,7 +212,7 @@ def test_sensor_spike_invariant_safe():
 - Produces:
   - `@dataclass RealismReport` with `scenario_id: str`, `ok: bool`, `checks: list[tuple[str, bool, str]]`.
   - `check_process_realism(scenario_id: str, seed: int = 42) -> RealismReport`.
-  - Checks: level within documented bounds; `flow_rate == inflow - outflow` (recomputed from state) per step; valve/pump state consistency; bounded slew between consecutive `tank_level`s; zero violations for benign scenarios.
+  - Checks: level within documented bounds; `flow_rate == inflow - outflow` (recomputed from state) per step; valve/pump state consistency; bounded slew between consecutive `tank_level`s; zero violations for benign scenarios; **monotonic timestamps** over event traces (guards the Task 2 flake class).
 
 - [ ] **Step 1:** Write failing tests: `check_process_realism("startup_01").ok is True`, `"flow_balance"` check present, level-bounds check present, deterministic across runs.
 - [ ] **Step 2:** Run — FAIL (module missing).
@@ -178,7 +222,7 @@ def test_sensor_spike_invariant_safe():
 
 ---
 
-### Task 7: Docs evidence + ONBOARDING phase table
+### Task 8: Docs evidence + ONBOARDING phase table
 
 **Files:**
 - Modify: `TECHNICAL_REPORT_NOTES.md`, `docs/ONBOARDING.md` (phase table + Available Scenarios rows).
@@ -192,12 +236,12 @@ def test_sensor_spike_invariant_safe():
   PYTHONPATH=src .venv/bin/python -m safeco.scenarios benign_duty_jitter_01 --seed 42 --fingerprint
   PYTHONPATH=src .venv/bin/python -m safeco.scenarios benign_setpoint_nudge_01 --seed 42 --fingerprint
   ```
-- [ ] **Step 2:** Append the date-stamped realism evidence to `TECHNICAL_REPORT_NOTES.md`; update `ONBOARDING.md` phase table + scenario rows.
+- [ ] **Step 2:** Append the date-stamped realism evidence to `TECHNICAL_REPORT_NOTES.md`; update `ONBOARDING.md` phase table + scenario rows. Record Task 2's `STALE_TIMESTAMP` fix in `TECHNICAL_REPORT_NOTES.md` and in the PR body (Joseph/Daniel review of `evaluation.py`).
 - [ ] **Step 3:** Commit `docs: record benign-anomaly process-realism evidence`.
 
 ---
 
-### Task 8: Full verification gate
+### Task 9: Full verification gate
 
 **Files:** none (verification only)
 
