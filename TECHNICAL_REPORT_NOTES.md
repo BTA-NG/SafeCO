@@ -137,6 +137,32 @@ separate.
   `ANOMALY_PLANS` into `events_for_scenario` when baseline metrics must exercise
   the anomalies is a Joseph/Daniel follow-up.
 
+## Hardening: attack timing variation + telemetry noise (8 September 2026)
+
+- Bounded telemetry noise on the observed layer: `telemetry_noise` plan kind
+  adds 3σ-clamped gaussian noise to observed `tank_level`/`flow_rate` only; the
+  true `PlantState` stays clean so invariants never trip on a sensor artifact.
+  New `benign_noise_01` (steady running, `normal`) gives the Layer-5 baseline a
+  realistic noisy benign envelope.
+- Attack timing variation: `attack_*_jitter_01` variants jitter the approach
+  phase durations (pre-attack silence for injection/replay/mistimed; cadence for
+  drift). Same command payloads and same invariant-violation set as the base
+  attacks; detection must lean on process context, not fixed clock offsets.
+  Registered in a separate `ATTACK_JITTER_SCENARIOS` registry so the existing
+  `ATTACK_SCENARIOS` exact-set assertion and eval id→reason mapping are unchanged.
+- Generator version bumped to `safeco-scenarios/1.3`.
+- Evaluation handoff seam: `observed_state_snapshots(scenario_id, seed)` exposes
+  the observed series; mapping it onto `Event.process` inside `events_for_scenario`
+  (and retraining Layer 5 on the noisy benign track) is Joseph's follow-up.
+- Reproducible fingerprints (seed 42):
+  - `benign_noise_01` (normal): `6ff5662b1a1cdb43b73d30310bf4381c381d249645467e719a4be35da85eca2f`
+  - `attack_injection_jitter_01` (injection): `11f5cfdd81281a156c30609dc9d4742da16568d72681b20c966acaee35333d44`
+  - `attack_replay_jitter_01` (replay): `1d7322c7e1a8c33627b070ad5f5b8310af687496049bf2bb359b4e4730b44cda`
+  - `attack_mistimed_jitter_01` (mistimed): `44f11c548bffeb24fe7e00e087f1b3b155f321bae513d106d7125eaa6b5a2330`
+  - `attack_drift_jitter_01` (drift): `8df39f0de234ec4238644fac0a4626b03e970015c489d25082f38cbbf49c7771`
+- Realism evidence reproduces via `check_process_realism("benign_noise_01")`
+  including the `bounded_noise` check.
+
 ## Final report outline
 
 1. Problem and threat model.

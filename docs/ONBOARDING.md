@@ -250,6 +250,6 @@ These files define the system's shared interface. Changes require Daniel's revie
 | 1 | Foundation (simulator + 4 normal scenarios) | ✅ Done |
 | 2 | Normal plant & data (maintenance, extended normal, CLI, fingerprints) | ✅ Done |
 | 3 | Attacks (injection, replay, mistimed valid, slow drift) | ✅ Done |
-| 4 | Detector support (process realism validation) | ⬜ 1–7 Sep (benign anomalies + realism evidence) |
-| 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep |
+| 4 | Detector support (process realism validation) | ✅ Done |
+| 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep (in progress) |
 | 6 | Submission (4-page report, architecture figures, demo) | ⬜ 15–20 Sep |
