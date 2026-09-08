@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from .plant import OperatingMode, PowerSource, Register
 from .simulator import CommandRecord, PlantSimulator
 
-GENERATOR_VERSION = "safeco-scenarios/1.2"
+GENERATOR_VERSION = "safeco-scenarios/1.3"
 """Version tag recorded in every ``ScenarioResult`` for dataset provenance."""
 
 GROUND_TRUTH: dict[str, str] = {
