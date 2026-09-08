@@ -38,6 +38,10 @@ GROUND_TRUTH: dict[str, str] = {
     "attack_baseline_low_tank_01": "baseline_anomaly",
     "attack_baseline_high_limit_01": "baseline_anomaly",
     "attack_baseline_mode_context_01": "baseline_anomaly",
+    "attack_injection_jitter_01": "injection",
+    "attack_replay_jitter_01": "replay",
+    "attack_mistimed_jitter_01": "mistimed",
+    "attack_drift_jitter_01": "drift",
 }
 """Override map for ground-truth labels.
 
@@ -316,10 +320,11 @@ def run_scenario(
         KeyError: If ``name`` is not found in the registry.
 
     """
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
     if name not in scenarios:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
-    plan = anomaly_plan if anomaly_plan is not None else ANOMALY_PLANS.get(name)
+    plans = {**ANOMALY_PLANS, **ATTACK_JITTER_PLANS}
+    plan = anomaly_plan if anomaly_plan is not None else plans.get(name)
     return _execute(
         name,
         seed,
@@ -701,6 +706,37 @@ ATTACK_SCENARIOS.update(
     }
 )
 
+ATTACK_JITTER_SCENARIOS: dict[str, Callable[[], list[Step]]] = {
+    "attack_injection_jitter_01": attack_injection_steps,
+    "attack_replay_jitter_01": attack_replay_steps,
+    "attack_mistimed_jitter_01": attack_mistimed_steps,
+    "attack_drift_jitter_01": attack_drift_steps,
+}
+"""Timing-jitter attack variants.
+
+Each entry reuses the base attack's step factory; ``ATTACK_JITTER_PLANS``
+varies the duration of approach phases so the unsafe command lands at a
+different, still-reproducible offset. Kept separate from ``ATTACK_SCENARIOS``
+so Joseph's exact-set assertion and eval id->reason mapping stay valid until
+he opts the variants in.
+"""
+
+ATTACK_JITTER_PLANS: dict[str, AnomalyPlan] = {
+    "attack_injection_jitter_01": [
+        ("initial_shutdown", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_replay_jitter_01": [
+        ("close_inlet_for_service", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_mistimed_jitter_01": [
+        ("force_recovery_without_power", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_drift_jitter_01": [
+        ("attacker_raise_target", DURATION_JITTER, {"fraction": 0.6})
+    ],
+}
+"""Jitter plan per timing-variation variant (see ``ATTACK_JITTER_SCENARIOS``)."""
+
 
 def main(argv: list[str] | None = None) -> None:
     """Run a scenario from the command line and print JSON output.
@@ -719,7 +755,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fingerprint", action="store_true")
     args = parser.parse_args(argv)
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
     if args.name not in scenarios:
         print(
             f"error: unknown scenario {args.name!r}; known: {sorted(scenarios)}",
