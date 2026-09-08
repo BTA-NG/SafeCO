@@ -7,123 +7,176 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <span class="product">SafeCO</span>
-        <span class="tagline">Advisory command monitor for industrial control systems</span>
-      </div>
-      <div class="site-line">
-        Monitored site: <span class="site">Adupe Municipal Water Station</span>
-        <span class="site-note">example deployment</span>
-      </div>
-    </header>
-
-    <p class="advisory-strip">
-      Advisory only — SafeCO observes and explains commands. It does not block
-      them or change the plant; a human decides and acts.
-    </p>
-
-    <div id="health-banner" class="banner" role="status" hidden></div>
-
-    <nav class="tabs" role="tablist">
-      <button type="button" class="tab" data-tab="plant" role="tab">Plant state</button>
-      <button type="button" class="tab" data-tab="alerts" role="tab">
-        Alerts<span class="tab-badge" data-alert-count hidden>0</span>
-      </button>
-      <button type="button" class="tab" data-tab="events" role="tab">Events</button>
-      <button type="button" class="tab" data-tab="scenarios" role="tab">Scenarios</button>
-    </nav>
-
-    <main>
-      <section id="plant-state" class="panel" data-panel="plant">
-        <h2>Plant state</h2>
-        <p class="muted" data-empty>Waiting for the local control feed…</p>
-        <div class="plant-body" hidden>
-          <dl class="state-grid">
-            <div><dt>Operating mode</dt><dd data-field="mode"><span class="pill">—</span></dd></div>
-            <div><dt>Power source</dt><dd data-field="power_source"><span class="pill">—</span></dd></div>
-            <div><dt>Pump</dt><dd data-field="pump_state"><span class="pill">—</span></dd></div>
-            <div><dt>Inlet valve</dt><dd data-field="inlet_valve_state"><span class="pill">—</span></dd></div>
-            <div><dt>Outlet valve</dt><dd data-field="outlet_valve_state"><span class="pill">—</span></dd></div>
-            <div><dt>Target level</dt><dd data-field="target_level">—</dd></div>
-          </dl>
-          <div class="level">
-            <div class="level-head">
-              <span>Tank level</span>
-              <span class="level-value" data-field="tank_level">—</span>
-            </div>
-            <div class="level-track">
-              <div class="level-fill" data-field="tank_level_bar"></div>
-              <div class="level-limit" data-field="high_level_limit_mark" title="High-level limit"></div>
-            </div>
-            <div class="level-scale"><span>0%</span><span>100%</span></div>
-          </div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="product">SafeCO</span>
+          <span class="brand-sub">advisory command monitor</span>
         </div>
-      </section>
-
-      <section id="alerts" class="panel" data-panel="alerts" hidden>
-        <div class="panel-head">
-          <h2>Alerts</h2>
-          <div class="filter" role="group" aria-label="Alert filter">
-            <button type="button" class="chip active" data-filter="all">All</button>
-            <button type="button" class="chip" data-filter="unacknowledged">Unacknowledged</button>
-          </div>
-        </div>
-        <p class="muted" data-empty>No alerts. An empty queue is not proof of safety.</p>
-        <ul class="alert-list"></ul>
-      </section>
-
-      <section id="events" class="panel" data-panel="events" hidden>
-        <div class="panel-head">
-          <h2>Recent events</h2>
-          <label class="inline">
-            Scenario
-            <input id="event-scenario-filter" type="text" placeholder="all scenarios" />
-          </label>
-        </div>
-        <p class="muted" data-empty>No events recorded yet.</p>
-        <table class="events-table" hidden>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Scenario</th>
-              <th>Ground truth</th>
-              <th>Source</th>
-              <th>Command</th>
-              <th>Target</th>
-              <th>Value</th>
-              <th>Mode</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
-
-      <section id="scenario-controls" class="panel" data-panel="scenarios" hidden>
-        <h2>Run a scenario</h2>
-        <p class="muted">
-          Runs the simulator so its consequences can be observed and explained.
-          Seeded for reproducibility. Attack scenarios are labelled.
+        <nav class="nav" role="tablist">
+          <button type="button" class="nav-item" data-tab="plant" role="tab">
+            <span class="nav-label">Plant state</span>
+          </button>
+          <button type="button" class="nav-item" data-tab="alerts" role="tab">
+            <span class="nav-label">Alerts</span>
+            <span class="nav-badge" data-alert-count hidden>0</span>
+          </button>
+          <button type="button" class="nav-item" data-tab="events" role="tab">
+            <span class="nav-label">Events</span>
+          </button>
+          <button type="button" class="nav-item" data-tab="scenarios" role="tab">
+            <span class="nav-label">Scenarios</span>
+          </button>
+          <button type="button" class="nav-item" data-tab="health" role="tab">
+            <span class="nav-label">System health</span>
+          </button>
+        </nav>
+        <p class="sidebar-note">
+          Advisory only. SafeCO observes and explains commands; it never blocks
+          them or changes the plant. A human decides and acts.
         </p>
-        <form id="scenario-form">
-          <label for="scenario-select">Scenario</label>
-          <select id="scenario-select" name="scenario"></select>
-          <label for="seed-input">Seed</label>
-          <input id="seed-input" name="seed" type="number" value="42" min="0" />
-          <button type="submit">Run scenario</button>
-        </form>
-        <p id="scenario-result" class="muted" role="status"></p>
-      </section>
-    </main>
+      </aside>
 
-    <footer>
-      <p class="muted">
-        SafeCO is a local-first advisory monitor for industrial/utility control
-        systems. Adupe is a fictional, representative site used here as an example
-        deployment. The hash chain detects later modification of stored events,
-        not whether a sensor reading was truthful.
-      </p>
-    </footer>
+      <div class="content">
+        <header class="topbar">
+          <div class="site">
+            <label class="site-label" for="site-name">Monitored site</label>
+            <input
+              id="site-name"
+              class="site-name"
+              type="text"
+              aria-label="Monitored site name (editable)"
+              maxlength="80"
+            />
+          </div>
+          <div class="live">
+            <span class="live-dot" id="live-dot" aria-hidden="true"></span>
+            <span class="live-text" id="live-text">connecting…</span>
+            <button type="button" id="refresh-btn" class="ghost">Refresh</button>
+          </div>
+        </header>
+
+        <div id="health-banner" class="banner" role="status" hidden></div>
+
+        <main>
+          <section id="plant-state" class="panel" data-panel="plant">
+            <h2>Plant state</h2>
+            <p class="muted" data-empty>Waiting for the local control feed…</p>
+            <div class="plant-body" hidden>
+              <div class="cards">
+                <div class="stat"><span class="stat-key">Operating mode</span><span class="stat-val" data-field="mode"><span class="pill">—</span></span></div>
+                <div class="stat"><span class="stat-key">Power source</span><span class="stat-val" data-field="power_source"><span class="pill">—</span></span></div>
+                <div class="stat"><span class="stat-key">Pump</span><span class="stat-val" data-field="pump_state"><span class="pill">—</span></span></div>
+                <div class="stat"><span class="stat-key">Inlet valve</span><span class="stat-val" data-field="inlet_valve_state"><span class="pill">—</span></span></div>
+                <div class="stat"><span class="stat-key">Outlet valve</span><span class="stat-val" data-field="outlet_valve_state"><span class="pill">—</span></span></div>
+                <div class="stat"><span class="stat-key">Target level</span><span class="stat-val" data-field="target_level">—</span></div>
+              </div>
+              <div class="level">
+                <div class="level-head">
+                  <span>Tank level</span>
+                  <span class="level-value" data-field="tank_level">—</span>
+                </div>
+                <div class="level-track">
+                  <div class="level-fill" data-field="tank_level_bar"></div>
+                  <div class="level-limit" data-field="high_level_limit_mark" title="High-level limit"></div>
+                </div>
+                <div class="level-scale"><span>0%</span><span>100%</span></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="alerts" class="panel" data-panel="alerts" hidden>
+            <div class="panel-head">
+              <h2>Alerts</h2>
+              <div class="toolbar">
+                <div class="filter" role="group" aria-label="Alert filter">
+                  <button type="button" class="chip active" data-filter="all">All</button>
+                  <button type="button" class="chip" data-filter="unacknowledged">Unacknowledged</button>
+                  <button type="button" class="chip" data-filter="acknowledged">Acknowledged</button>
+                </div>
+                <input
+                  id="alert-search"
+                  class="search"
+                  type="search"
+                  placeholder="Search by alert ID…"
+                  aria-label="Search alerts by ID"
+                />
+              </div>
+            </div>
+            <p class="muted" data-empty>No alerts. An empty queue is not proof of safety.</p>
+            <ul class="alert-list"></ul>
+          </section>
+
+          <section id="events" class="panel" data-panel="events" hidden>
+            <div class="panel-head">
+              <h2>Recent events</h2>
+              <label class="inline">
+                Scenario
+                <input id="event-scenario-filter" type="text" placeholder="all scenarios" />
+              </label>
+            </div>
+            <p class="muted" data-empty>No events recorded yet.</p>
+            <div class="table-wrap" hidden>
+              <table class="events-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Scenario</th>
+                    <th>Ground truth</th>
+                    <th>Source</th>
+                    <th>Command</th>
+                    <th>Target</th>
+                    <th>Value</th>
+                    <th>Mode</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="scenario-controls" class="panel" data-panel="scenarios" hidden>
+            <h2>Run a scenario</h2>
+            <p class="muted">
+              Runs the simulator so its consequences can be observed and explained.
+              Seeded for reproducibility. Attack scenarios are labelled.
+            </p>
+            <form id="scenario-form">
+              <label for="scenario-select">Scenario</label>
+              <select id="scenario-select" name="scenario"></select>
+              <label for="seed-input">Seed</label>
+              <input id="seed-input" name="seed" type="number" value="42" min="0" />
+              <button type="submit">Run scenario</button>
+            </form>
+            <p id="scenario-result" class="muted" role="status"></p>
+          </section>
+
+          <section id="health-page" class="panel" data-panel="health" hidden>
+            <h2>System health</h2>
+            <p class="muted">
+              SafeCO only detects what it observes. This view shows whether the
+              local collection feed is healthy or degraded.
+            </p>
+            <div class="cards">
+              <div class="stat"><span class="stat-key">Feed status</span><span class="stat-val" data-health="status"><span class="pill">—</span></span></div>
+              <div class="stat"><span class="stat-key">Visibility</span><span class="stat-val" data-health="visibility"><span class="pill">—</span></span></div>
+              <div class="stat"><span class="stat-key">Database</span><span class="stat-val" data-health="database"><span class="pill">—</span></span></div>
+              <div class="stat"><span class="stat-key">Events collected</span><span class="stat-val" data-health="event_count">—</span></div>
+              <div class="stat wide"><span class="stat-key">Last event</span><span class="stat-val" data-health="last_event">—</span></div>
+            </div>
+          </section>
+        </main>
+
+        <footer>
+          <p class="muted">
+            SafeCO is a local-first advisory monitor for industrial/utility control
+            systems. The monitored site name is a local display label. The hash
+            chain detects later modification of stored events, not whether a sensor
+            reading was truthful.
+          </p>
+        </footer>
+      </div>
+    </div>
 
     <script src="/static/app.js"></script>
   </body>

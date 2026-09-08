@@ -58,21 +58,27 @@ explained. It never blocks a command or acts on a real plant.
 ## Dashboard
 
 A local operator console is served at `/`, with assets under `/static` (vanilla
-HTML/CSS/JS — no build step). It has tabbed views — **Plant state**, **Alerts**,
-**Events**, and **Scenarios** — over a persistent health banner, and polls
-`/api/health`, `/api/plant/state`, `/api/events`, and `/api/alerts`.
+HTML/CSS/JS — no build step). A fixed sidebar navigates five views over a live
+feed-status indicator and a persistent health banner. It polls `/api/health`,
+`/api/plant/state`, `/api/events`, and `/api/alerts` every 2 seconds and also
+refreshes immediately after any operator action.
 
 - **Plant state**: operating mode, power source, pump and valve status pills, and
   a tank-level bar with the high-level-limit marker.
-- **Alerts**: the detector queue with an unacknowledged badge, an all/unacknowledged
-  filter, and per-alert severity, explanation, evidence, confidence, and recommended
+- **Alerts**: the detector queue with an unacknowledged badge; all / unacknowledged
+  / acknowledged filters; search by alert ID; and per-alert severity, the alert ID
+  with a copy button, explanation, evidence, a confidence meter, and recommended
   action, with a record-only acknowledge button.
 - **Events**: the recent event feed with a scenario filter and ground-truth labels.
 - **Scenarios**: run a scenario by id and seed and see the run summary.
+- **System health**: feed status, visibility, database availability, total events
+  collected, and the last event timestamp.
 
-The palette is flat (white content, a dark header bar, and status/severity colours
-— no gradients). If the local feed is lost the console keeps the last-known values
-and shows a degraded-visibility banner. It never implies SafeCO acted automatically;
+The monitored-site name shown top-left is an editable display label persisted in
+the browser (`localStorage`); it defaults to the Adupe example site. The palette is
+flat (light content, a dark sidebar, status/severity colours — no gradients). If the
+local feed is lost the console keeps the last-known values and shows a
+degraded-visibility banner. It never implies SafeCO acted automatically;
 acknowledgement is an engineer record, not a plant action.
 
 

@@ -1,8 +1,9 @@
 // SafeCO operator console client.
 //
-// Polls the local API and renders plant state, alerts, events, and scenario
-// controls across tabbed views. SafeCO is advisory: this page only reads state
-// and records acknowledgement. It never issues or blocks a control command.
+// Polls the local API and renders plant state, alerts, events, scenario
+// controls, and system health across sidebar-navigated views. SafeCO is
+// advisory: this page only reads state and records acknowledgement. It never
+// issues or blocks a control command.
 //
 // Offline story: if the local control feed cannot be reached, the page keeps the
 // last-known values on screen and shows a degraded-visibility banner rather than
@@ -10,7 +11,13 @@
 
 "use strict";
 
-const POLL_MS = 3000;
+// Poll cadence in milliseconds. The console re-fetches the feed this often, and
+// also refreshes immediately after an operator action (acknowledge, run,
+// filter, manual refresh) so those changes are not gated by the interval.
+const POLL_MS = 2000;
+
+const SITE_NAME_KEY = "safeco.siteName";
+const DEFAULT_SITE_NAME = "Adupe Municipal Water Station";
 
 const API = {
   health: "/api/health",
@@ -23,7 +30,9 @@ const API = {
 const state = {
   lastGood: null,
   alertFilter: "all",
+  alertSearch: "",
   eventScenario: "",
+  lastUpdated: null,
 };
 
 async function getJSON(url) {
@@ -32,7 +41,7 @@ async function getJSON(url) {
   return response.json();
 }
 
-/* ---------- Tabs ---------- */
+/* ---------- Sidebar navigation ---------- */
 
 function activateTab(name) {
   for (const tab of document.querySelectorAll("[data-tab]")) {
@@ -50,21 +59,36 @@ function setupTabs() {
   activateTab("plant");
 }
 
-/* ---------- Health banner ---------- */
+/* ---------- Editable site name (persisted locally) ---------- */
+
+function setupSiteName() {
+  const input = document.getElementById("site-name");
+  input.value = localStorage.getItem(SITE_NAME_KEY) || DEFAULT_SITE_NAME;
+  const persist = () => {
+    const name = input.value.trim() || DEFAULT_SITE_NAME;
+    input.value = name;
+    localStorage.setItem(SITE_NAME_KEY, name);
+    document.title = `SafeCO — ${name}`;
+  };
+  input.addEventListener("change", persist);
+  input.addEventListener("blur", persist);
+  document.title = `SafeCO — ${input.value}`;
+}
+
+/* ---------- Live status ---------- */
+
+function setLive(mode, message) {
+  const dot = document.getElementById("live-dot");
+  const text = document.getElementById("live-text");
+  dot.className = `live-dot ${mode}`;
+  text.textContent = message;
+}
 
 function setBanner(mode, message) {
   const banner = document.getElementById("health-banner");
   banner.hidden = false;
   banner.className = `banner ${mode}`;
   banner.textContent = message;
-}
-
-function markDegraded(reason) {
-  setBanner(
-    "degraded",
-    `Degraded visibility — the local control feed is unreachable (${reason}). ` +
-      "Showing last-known values. SafeCO cannot see commands while the feed is down."
-  );
 }
 
 /* ---------- Plant state ---------- */
@@ -80,10 +104,7 @@ function pillClass(field, value) {
     if (v === "generator") return "info";
     return "good";
   }
-  if (field === "mode") {
-    if (v === "recovery") return "warn";
-    return "info";
-  }
+  if (field === "mode") return v === "recovery" ? "warn" : "info";
   if (field === "pump_state") return v === "on" ? "info" : "";
   if (field === "inlet_valve_state" || field === "outlet_valve_state") {
     return v === "open" ? "good" : "";
@@ -91,15 +112,15 @@ function pillClass(field, value) {
   return "";
 }
 
-function setPill(grid, field, value) {
-  const dd = grid.querySelector(`[data-field="${field}"]`);
-  if (!dd) return;
-  const pill = dd.querySelector(".pill");
+function setPill(root, field, value) {
+  const holder = root.querySelector(`[data-field="${field}"]`);
+  if (!holder) return;
+  const pill = holder.querySelector(".pill");
   if (pill) {
     pill.textContent = value ?? "—";
     pill.className = `pill ${pillClass(field, value)}`.trim();
   } else {
-    dd.textContent = value ?? "—";
+    holder.textContent = value ?? "—";
   }
 }
 
@@ -155,17 +176,17 @@ function formatValue(value) {
 function renderEvents(rows) {
   const panel = document.getElementById("events");
   const empty = panel.querySelector("[data-empty]");
-  const table = panel.querySelector(".events-table");
-  const body = table.querySelector("tbody");
+  const wrap = panel.querySelector(".table-wrap");
+  const body = wrap.querySelector("tbody");
   body.textContent = "";
 
   if (!rows || rows.length === 0) {
     empty.hidden = false;
-    table.hidden = true;
+    wrap.hidden = true;
     return;
   }
   empty.hidden = true;
-  table.hidden = false;
+  wrap.hidden = false;
   for (const ev of rows) {
     const tr = document.createElement("tr");
     const time = document.createElement("td");
@@ -177,9 +198,8 @@ function renderEvents(rows) {
     gtSpan.className = `gt gt-${ev.ground_truth}`;
     gtSpan.textContent = ev.ground_truth ?? "";
     gt.appendChild(gtSpan);
-    const cells = [ev.source, ev.command, ev.target, formatValue(ev.value), ev.mode];
     tr.append(time, scenario, gt);
-    for (const value of cells) {
+    for (const value of [ev.source, ev.command, ev.target, formatValue(ev.value), ev.mode]) {
       const td = document.createElement("td");
       td.textContent = value ?? "";
       tr.appendChild(td);
@@ -197,25 +217,35 @@ function updateAlertBadge(alerts) {
   badge.hidden = pending === 0;
 }
 
+function filterAlerts(alerts) {
+  let shown = alerts;
+  if (state.alertFilter === "unacknowledged") {
+    shown = shown.filter((a) => a.acknowledged === false);
+  } else if (state.alertFilter === "acknowledged") {
+    shown = shown.filter((a) => a.acknowledged === true);
+  }
+  const q = state.alertSearch.trim().toLowerCase();
+  if (q) shown = shown.filter((a) => String(a.alert_id).toLowerCase().includes(q));
+  return shown;
+}
+
 function renderAlerts(alerts) {
   const panel = document.getElementById("alerts");
   const empty = panel.querySelector("[data-empty]");
   const list = panel.querySelector(".alert-list");
   list.textContent = "";
 
-  const shown =
-    state.alertFilter === "unacknowledged"
-      ? alerts.filter((a) => a.acknowledged === false)
-      : alerts;
-
+  const shown = filterAlerts(alerts);
   if (!shown || shown.length === 0) {
     empty.hidden = false;
+    empty.textContent =
+      state.alertSearch || state.alertFilter !== "all"
+        ? "No alerts match the current filter."
+        : "No alerts. An empty queue is not proof of safety.";
     return;
   }
   empty.hidden = true;
-  for (const alert of shown) {
-    list.appendChild(renderAlert(alert));
-  }
+  for (const alert of shown) list.appendChild(renderAlert(alert));
 }
 
 function renderAlert(alert) {
@@ -242,6 +272,21 @@ function renderAlert(alert) {
   }
   head.append(title, right);
   li.appendChild(head);
+
+  // Alert id, exposed with a copy button so an operator can search for it.
+  const idRow = document.createElement("div");
+  idRow.className = "alert-id";
+  const idLabel = document.createElement("span");
+  idLabel.textContent = "Alert ID";
+  const idCode = document.createElement("code");
+  idCode.textContent = alert.alert_id;
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "copy-btn";
+  copyBtn.textContent = "Copy";
+  copyBtn.addEventListener("click", () => copyAlertId(alert.alert_id, copyBtn));
+  idRow.append(idLabel, idCode, copyBtn);
+  li.appendChild(idRow);
 
   const dl = document.createElement("dl");
   appendRow(dl, "Why it matters", alert.explanation);
@@ -299,6 +344,19 @@ function appendConfidence(dl, confidence) {
   dl.append(dt, dd);
 }
 
+async function copyAlertId(alertId, button) {
+  try {
+    await navigator.clipboard.writeText(alertId);
+    const original = button.textContent;
+    button.textContent = "Copied";
+    setTimeout(() => {
+      button.textContent = original;
+    }, 1200);
+  } catch (err) {
+    button.textContent = "Copy failed";
+  }
+}
+
 async function acknowledge(alertId, button) {
   button.disabled = true;
   try {
@@ -314,7 +372,7 @@ async function acknowledge(alertId, button) {
   }
 }
 
-function setupAlertFilter() {
+function setupAlertControls() {
   for (const chip of document.querySelectorAll("[data-filter]")) {
     chip.addEventListener("click", () => {
       state.alertFilter = chip.dataset.filter;
@@ -324,6 +382,36 @@ function setupAlertFilter() {
       if (state.lastGood) renderAlerts(state.lastGood.alerts);
     });
   }
+  const search = document.getElementById("alert-search");
+  search.addEventListener("input", () => {
+    state.alertSearch = search.value;
+    if (state.lastGood) renderAlerts(state.lastGood.alerts);
+  });
+}
+
+/* ---------- Health view ---------- */
+
+function renderHealth(health) {
+  const page = document.getElementById("health-page");
+  const setHealthPill = (key, value, cls) => {
+    const holder = page.querySelector(`[data-health="${key}"]`);
+    const pill = holder.querySelector(".pill");
+    if (pill) {
+      pill.textContent = value;
+      pill.className = `pill ${cls}`.trim();
+    } else {
+      holder.textContent = value;
+    }
+  };
+  const degraded = health.degraded_visibility;
+  setHealthPill("status", health.status, degraded ? "bad" : "good");
+  setHealthPill("visibility", degraded ? "degraded" : "full", degraded ? "bad" : "good");
+  setHealthPill("database", health.database, "info");
+  page.querySelector('[data-health="event_count"]').textContent = String(
+    health.event_count ?? 0
+  );
+  page.querySelector('[data-health="last_event"]').textContent =
+    health.last_event_timestamp || "— none yet —";
 }
 
 /* ---------- Scenarios ---------- */
@@ -396,38 +484,64 @@ async function refresh() {
       getJSON(API.alerts),
     ]);
     state.lastGood = { health, plant, events, alerts };
+    state.lastUpdated = Date.now();
 
     if (health.degraded_visibility) {
       setBanner(
         "degraded",
         "Degraded visibility — no events recorded yet. Run a scenario or start the feed."
       );
+      setLive("degraded", "feed degraded");
     } else {
       setBanner("ok", `Local feed healthy. Last event ${health.last_event_timestamp}.`);
+      setLive("ok", "feed healthy · just now");
     }
     renderPlant(plant);
     renderEvents(events);
     renderAlerts(alerts);
     updateAlertBadge(alerts);
+    renderHealth(health);
   } catch (err) {
-    markDegraded(err.message);
+    setLive("degraded", "feed unreachable");
+    markDegradedBanner(err.message);
     if (state.lastGood) {
       renderPlant(state.lastGood.plant);
       renderEvents(state.lastGood.events);
       renderAlerts(state.lastGood.alerts);
       updateAlertBadge(state.lastGood.alerts);
+      renderHealth(state.lastGood.health);
     }
   }
 }
 
+function markDegradedBanner(reason) {
+  setBanner(
+    "degraded",
+    `Degraded visibility — the local control feed is unreachable (${reason}). ` +
+      "Showing last-known values. SafeCO cannot see commands while the feed is down."
+  );
+}
+
+function tickLiveClock() {
+  if (!state.lastUpdated) return;
+  const dot = document.getElementById("live-dot");
+  if (dot.classList.contains("degraded")) return;
+  const secs = Math.round((Date.now() - state.lastUpdated) / 1000);
+  const when = secs <= 1 ? "just now" : `${secs}s ago`;
+  document.getElementById("live-text").textContent = `feed healthy · updated ${when}`;
+}
+
 function start() {
   setupTabs();
-  setupAlertFilter();
+  setupSiteName();
+  setupAlertControls();
   setupEventFilter();
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
+  document.getElementById("refresh-btn").addEventListener("click", refresh);
   loadScenarios();
   refresh();
   setInterval(refresh, POLL_MS);
+  setInterval(tickLiveClock, 1000);
 }
 
 document.addEventListener("DOMContentLoaded", start);

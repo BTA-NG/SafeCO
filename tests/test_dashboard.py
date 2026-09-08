@@ -24,7 +24,6 @@ def test_dashboard_index_is_served() -> None:
     assert "text/html" in response.headers["content-type"]
     body = response.text
     assert "SafeCO" in body
-    assert "Adupe" in body
     # Structural hooks the client script renders into.
     for element_id in (
         "health-banner",
@@ -36,14 +35,51 @@ def test_dashboard_index_is_served() -> None:
         assert f'id="{element_id}"' in body
 
 
+def test_dashboard_defaults_site_name_to_adupe_example() -> None:
+    """Adupe remains the default example site, now as an editable default."""
+    script = client.get("/static/app.js").text
+    assert "Adupe" in script
+
+
 def test_dashboard_has_tabbed_navigation() -> None:
     """The console exposes tabbed views, not one flat API dump."""
     body = client.get("/").text
-    for view in ("plant", "alerts", "events", "scenarios"):
+    for view in ("plant", "alerts", "events", "scenarios", "health"):
         assert f'data-tab="{view}"' in body
     # A tab panel per view so navigation has something to show/hide.
-    for view in ("plant", "alerts", "events", "scenarios"):
+    for view in ("plant", "alerts", "events", "scenarios", "health"):
         assert f'data-panel="{view}"' in body
+
+
+def test_dashboard_has_health_view() -> None:
+    """A dedicated system-health view surfaces feed status and counts."""
+    body = client.get("/").text
+    assert 'data-panel="health"' in body
+    assert 'id="health-page"' in body
+
+
+def test_dashboard_alerts_view_supports_ack_filter_and_id_search() -> None:
+    """Operators can view acknowledged alerts and search by alert id."""
+    body = client.get("/").text
+    for f in ("all", "unacknowledged", "acknowledged"):
+        assert f'data-filter="{f}"' in body
+    assert 'id="alert-search"' in body
+
+
+def test_dashboard_allows_renaming_the_site() -> None:
+    """The monitored site name is editable, with no fixed 'example' label."""
+    body = client.get("/").text
+    assert 'id="site-name"' in body
+    assert "example deployment" not in body.lower()
+
+
+def test_dashboard_script_persists_name_and_copies_ids() -> None:
+    """The client persists the site name and can copy an alert id."""
+    script = client.get("/static/app.js").text
+    assert "localStorage" in script
+    assert "clipboard" in script
+    # Uses the acknowledged endpoint or client-side ack filtering.
+    assert "acknowledged" in script
 
 
 def test_dashboard_script_supports_tab_switching() -> None:
