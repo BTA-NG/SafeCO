@@ -1,7 +1,12 @@
 """Tests for bounded telemetry noise on observed snapshot data."""
 
 from safeco.realism import check_process_realism
-from safeco.scenarios import NORMAL_SCENARIOS, run_scenario, scenario_fingerprint
+from safeco.scenarios import (
+    NORMAL_SCENARIOS,
+    observed_state_snapshots,
+    run_scenario,
+    scenario_fingerprint,
+)
 
 NOISE_SCALE = 0.2
 CLAMP_SIGMA = 3.0
@@ -50,3 +55,11 @@ def test_benign_noise_01_passes_realism():
     names = [name for name, _, _ in report.checks]
     assert "bounded_noise" in names
     assert report.ok
+
+
+def test_observed_state_snapshots_match_run_scenario():
+    for scenario_id in ("benign_noise_01", "benign_spike_01"):
+        assert (
+            observed_state_snapshots(scenario_id, seed=42)
+            == run_scenario(scenario_id, seed=42).snapshots
+        )

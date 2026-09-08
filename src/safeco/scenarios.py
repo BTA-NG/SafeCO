@@ -336,6 +336,30 @@ def run_scenario(
     )
 
 
+def observed_state_snapshots(scenario_id: str, seed: int = 42) -> list[dict]:
+    """Return the observed snapshot series for a scenario, after perturbation.
+
+    This is the handoff seam for the evaluation harness: it exposes exactly
+    what ``run_scenario`` produced with the scenario's registered plan (noise,
+    spike, jitter, or none). Joseph's ``events_for_scenario`` should map these
+    observed values onto ``Event.process`` when baseline metrics must exercise
+    the anomalies (the denoised ``PlantState`` values remain available via
+    ``run_scenario(..., anomaly_plan=[]).snapshots``).
+
+    Args:
+        scenario_id: Scenario registry key.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Observed snapshots with the registered plan applied.
+
+    Raises:
+        KeyError: If ``scenario_id`` is not a registered scenario.
+
+    """
+    return run_scenario(scenario_id, seed=seed).snapshots
+
+
 def startup_steps() -> list[Step]:
     """Build the startup scenario: SHUTDOWN -> inlet open -> pump on -> RUNNING."""
     return [
