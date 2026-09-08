@@ -109,7 +109,21 @@ class AlertStore:
     def list_alerts(
         self, *, acknowledged: bool | None = None, limit: int = 100
     ) -> list[dict[str, object]]:
-        """Return alerts most urgent first, optionally filtered by ack state."""
+        """Return stored alerts ordered most-urgent-first.
+
+        Results are ordered by severity rank (critical first) then alert id, so
+        the dashboard queue shows the highest-severity findings at the top and
+        the order is stable across polls.
+
+        Args:
+            acknowledged: If ``True`` return only acknowledged alerts, if
+                ``False`` only unacknowledged; if ``None`` return both.
+            limit: Maximum number of alerts to return.
+
+        Returns:
+            A list of alert dicts in the shared alert-contract shape.
+
+        """
         query = "SELECT * FROM alerts"
         params: list[object] = []
         if acknowledged is not None:
@@ -122,7 +136,15 @@ class AlertStore:
         return [self._row_to_dict(row) for row in rows]
 
     def get(self, alert_id: str) -> dict[str, object] | None:
-        """Return a single alert by id, or ``None`` if it does not exist."""
+        """Return a single alert by its id.
+
+        Args:
+            alert_id: The deterministic alert identifier to look up.
+
+        Returns:
+            The alert dict, or ``None`` if no alert with that id is stored.
+
+        """
         with self._lock:
             row = self.connection.execute(
                 "SELECT * FROM alerts WHERE alert_id = ?", (alert_id,)
@@ -130,7 +152,19 @@ class AlertStore:
         return self._row_to_dict(row) if row is not None else None
 
     def acknowledge(self, alert_id: str) -> bool:
-        """Mark an alert acknowledged. Return ``True`` if one was updated."""
+        """Mark an alert as acknowledged.
+
+        Acknowledgement is persisted so it survives restarts and detector
+        replay (``upsert`` never clears it).
+
+        Args:
+            alert_id: The identifier of the alert to acknowledge.
+
+        Returns:
+            ``True`` if an alert with that id existed and was updated, ``False``
+            otherwise (so callers can return 404 rather than false success).
+
+        """
         with self._lock:
             cursor = self.connection.execute(
                 "UPDATE alerts SET acknowledged = 1 WHERE alert_id = ?",
@@ -141,7 +175,19 @@ class AlertStore:
 
     @staticmethod
     def _row_to_dict(row: sqlite3.Row) -> dict[str, object]:
-        """Return a JSON-friendly alert dict in the shared contract shape."""
+        """Convert a stored alert row into the shared alert-contract dict.
+
+        The evidence column is stored as a JSON string; this parses it back into
+        an object and coerces the integer acknowledged flag to a bool so the API
+        emits the same shape the detector's ``Alert`` produces.
+
+        Args:
+            row: A ``sqlite3.Row`` from the alerts table.
+
+        Returns:
+            A JSON-friendly alert dict with evidence parsed and flags coerced.
+
+        """
         return {
             "alert_id": row["alert_id"],
             "event_id": row["event_id"],

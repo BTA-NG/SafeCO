@@ -19,9 +19,14 @@ router = APIRouter(tags=["scenarios"])
 
 @router.get("/scenarios")
 async def list_scenarios() -> list[str]:
-    """List all known scenario identifiers.
+    """List every scenario id the operator can run.
 
-    Returns both normal and attack scenario IDs from the scenario registries.
+    Merges the normal and attack scenario registries so the dashboard's
+    scenario picker can offer both benign and attack runs from one call.
+
+    Returns:
+        A sorted list of scenario id strings.
+
     """
     all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
     return sorted(all_scenarios.keys())
@@ -29,10 +34,21 @@ async def list_scenarios() -> list[str]:
 
 @router.get("/scenarios/{scenario_id}")
 async def get_scenario(scenario_id: str) -> dict[str, str]:
-    """Return scenario metadata.
+    """Return metadata confirming a scenario id is known.
 
-    Returns 404 if the scenario ID is not found in either the normal or
-    attack scenario registry.
+    Used to validate a scenario id before running it. Execution is a separate
+    POST so a read of this route never changes state.
+
+    Args:
+        scenario_id: The registry key to look up.
+
+    Returns:
+        A dict with the scenario id and a ``registered`` status.
+
+    Raises:
+        HTTPException: 404 if the id is in neither the normal nor attack
+            scenario registry.
+
     """
     all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
     if scenario_id not in all_scenarios:
@@ -49,12 +65,27 @@ def run_scenario_endpoint(
     alert_store: AlertStoreDep,
     seed: int = Query(default=42, ge=0),
 ) -> dict[str, object]:
-    """Run a scenario, persisting its events and detector alerts.
+    """Run a scenario and persist its events and detector alerts.
 
-    Drives the simulator through the scenario, stores each command as an event,
-    runs the detector over the growing history, and persists any findings. The
-    response summarises the run (events, alerts, violations, reproducibility
-    fingerprint). Returns 404 for an unknown scenario id.
+    Drives the simulator through the named scenario, stores each command as an
+    event, runs the detector over the growing history, and persists any
+    findings. This is how the dashboard produces an end-to-end demonstration
+    (command -> event -> detection -> alert) on demand. It is advisory only: the
+    run demonstrates consequences and never acts on a real plant.
+
+    Args:
+        scenario_id: The scenario registry key to execute.
+        store: The shared event store the run writes events to.
+        alert_store: The shared alert store the run writes findings to.
+        seed: Deterministic RNG seed so a run is reproducible.
+
+    Returns:
+        A summary dict: scenario id, seed, ground truth, event count, distinct
+        alert count, invariant violations, and the reproducibility fingerprint.
+
+    Raises:
+        HTTPException: 404 if the scenario id is unknown.
+
     """
     try:
         return run_scenario_and_persist(scenario_id, seed, store, alert_store)

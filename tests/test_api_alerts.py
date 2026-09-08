@@ -43,6 +43,48 @@ def test_unacknowledged_alerts_filter(client, alert_store) -> None:
     assert [item["alert_id"] for item in response.json()] == [b.alert_id]
 
 
+def test_acknowledged_alerts_filter(client, alert_store) -> None:
+    """The acknowledged route should return only alerts an engineer has seen."""
+    a = _unsafe_pump_alert("event-1")
+    b = build_alert(
+        "event-2",
+        ReasonCode.TANK_ABOVE_HIGH_LIMIT,
+        {"tank_level": 95.0, "high_level_limit": 90.0, "mode": "running"},
+    )
+    alert_store.upsert(a)
+    alert_store.upsert(b)
+    alert_store.acknowledge(a.alert_id)
+
+    response = client.get("/api/alerts/acknowledged")
+    assert response.status_code == 200
+    assert [item["alert_id"] for item in response.json()] == [a.alert_id]
+
+
+def test_alerts_query_param_selects_acknowledged(client, alert_store) -> None:
+    """The list route's acknowledged=true query returns only acknowledged alerts."""
+    a = _unsafe_pump_alert("event-1")
+    alert_store.upsert(a)
+    alert_store.acknowledge(a.alert_id)
+    alert_store.upsert(_unsafe_pump_alert("event-2"))
+
+    acked = client.get("/api/alerts", params={"acknowledged": "true"}).json()
+    assert [item["alert_id"] for item in acked] == [a.alert_id]
+
+
+def test_get_alert_by_id_returns_full_contract(client, alert_store) -> None:
+    """Fetching one alert by id returns its full contract, for ID search/copy."""
+    alert = _unsafe_pump_alert("event-1")
+    alert_store.upsert(alert)
+
+    response = client.get(f"/api/alerts/{alert.alert_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["alert_id"] == alert.alert_id
+    assert payload["reason_code"] == "unsafe_pump_start"
+    assert payload["title"]
+    assert payload["explanation"]
+
+
 def test_missing_alert_returns_404(client, alert_store) -> None:
     """A missing alert id should return a 404."""
     response = client.get("/api/alerts/not-found")

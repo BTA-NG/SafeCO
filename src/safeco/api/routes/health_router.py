@@ -16,14 +16,25 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health")
 def health_status(store: StoreDep) -> dict[str, object]:
-    """Report the current local SafeCO status.
+    """Report the health of the local collection feed for the dashboard.
 
-    The dashboard uses this endpoint to decide whether the local collection feed
-    is healthy or degraded. If no events are present, the API exposes that state
-    explicitly instead of silently reporting a healthy system.
+    SafeCO can only detect what it observes, so the dashboard must be able to
+    tell the operator when visibility is degraded rather than implying all is
+    well. When no events have been collected this returns a ``degraded`` status
+    with ``degraded_visibility`` true; otherwise it reports the newest event
+    timestamp and the total number of stored events.
+
+    Args:
+        store: The shared event store, injected per request.
+
+    Returns:
+        A status dict with ``status`` (``ok``/``degraded``), ``database``
+        availability, ``last_event_timestamp``, a ``degraded_visibility`` flag,
+        and the total ``event_count``.
+
     """
-    latest = store.list_events(limit=1)
-    if not latest:
+    count = store.count_events()
+    if count == 0:
         return {
             "status": "degraded",
             "database": "available",
@@ -32,11 +43,11 @@ def health_status(store: StoreDep) -> dict[str, object]:
             "event_count": 0,
         }
 
-    row = latest[0]
+    latest = store.list_events(limit=1)
     return {
         "status": "ok",
         "database": "available",
-        "last_event_timestamp": row["timestamp"],
+        "last_event_timestamp": latest[0]["timestamp"],
         "degraded_visibility": False,
-        "event_count": 1,
+        "event_count": count,
     }

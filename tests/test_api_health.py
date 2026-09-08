@@ -60,3 +60,24 @@ def test_health_endpoint_reports_latest_event_timestamp(client, event_store) -> 
     assert response.status_code == 200
     payload = response.json()
     assert payload["last_event_timestamp"] == event.timestamp
+
+
+def test_health_endpoint_reports_total_event_count(client, event_store) -> None:
+    """The health endpoint should report the true total event count."""
+    for i in range(3):
+        event_store.append(
+            Event(
+                scenario_id="normal_running_01",
+                ground_truth="normal",
+                source="scheduler",
+                command="telemetry",
+                target="tank",
+                value=50.0 + i,
+                mode="running",
+                process=ProcessSnapshot(50.0 + i, "open", "on"),
+                sequence_id=i + 1,
+            )
+        )
+
+    payload = client.get("/api/health").json()
+    assert payload["event_count"] == 3
