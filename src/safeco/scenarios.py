@@ -50,6 +50,7 @@ Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
 SENSOR_SPIKE = "sensor_spike"
 DURATION_JITTER = "duration_jitter"
 SETPOINT_NUDGE = "setpoint_nudge"
+TELEMETRY_NOISE = "telemetry_noise"
 """Benign-anomaly kinds understood by ``_execute``."""
 
 Anomaly = tuple[str, str, dict]
@@ -63,6 +64,9 @@ Kinds and params:
   step's simulated duration by up to ``fraction``.
 - ``setpoint_nudge``: ``{"match": str, "delta": float, "holds": int}`` —
   offset the observed target level for a few self-correcting steps.
+- ``telemetry_noise``: ``{"match": str, "noise_scale": float,
+  "clamp_sigma": float}`` — add gaussian noise to observed analog fields
+  on every matching step, clamped to ``clamp_sigma`` standard deviations.
 """
 
 AnomalyPlan = list[Anomaly]
@@ -176,7 +180,7 @@ def _execute(
         result.violations.append(sim.step(step_seconds))
         snap = sim.snapshot()
         snap["phase"] = phase
-        snap = _perturbed_observed(snap, phase, anomaly_plan, counters)
+        snap = _perturbed_observed(snap, phase, anomaly_plan, counters, anomaly_rng)
         result.snapshots.append(snap)
         if on_snapshot is not None:
             on_snapshot(snap)
@@ -210,6 +214,7 @@ def _perturbed_observed(
     phase: str,
     plan: AnomalyPlan | None,
     counters: list[int],
+    rng: random.Random | None,
 ) -> dict:
     """Return the observed snapshot after benign telemetry perturbations.
 
@@ -228,6 +233,8 @@ def _perturbed_observed(
         elif kind == SETPOINT_NUDGE and counters[index] < params["holds"]:
             observed = _apply_setpoint_nudge(observed, params)
             counters[index] += 1
+        elif kind == TELEMETRY_NOISE and rng is not None:
+            observed = _apply_telemetry_noise(observed, params, rng)
     return observed
 
 
@@ -254,6 +261,28 @@ def _apply_setpoint_nudge(snapshot: dict, params: dict) -> dict:
     """Return an observed-snapshot copy with the target level nudged by delta."""
     observed = dict(snapshot)
     observed["target_level"] = observed["target_level"] + params["delta"]
+    return observed
+
+
+def _apply_telemetry_noise(
+    snapshot: dict,
+    params: dict,
+    rng: random.Random,
+) -> dict:
+    """Return an observed-snapshot copy with clamped gaussian telemetry noise.
+
+    Noise is drawn per matching step from the scenario RNG, so the whole
+    trace stays reproducible. The ``clamp_sigma`` bound keeps a single
+    spurious reading inside the physical register range.
+    """
+    observed = dict(snapshot)
+    scale = params["noise_scale"]
+    clamp = params.get("clamp_sigma", 3.0) * scale
+    for analog_field in ("tank_level", "flow_rate"):
+        delta = rng.gauss(0.0, scale)
+        while abs(delta) > clamp:
+            delta = rng.gauss(0.0, scale)
+        observed[analog_field] = observed[analog_field] + delta
     return observed
 
 
@@ -608,6 +637,19 @@ def benign_setpoint_nudge_steps() -> list[Step]:
     ]
 
 
+def benign_noise_steps() -> list[Step]:
+    """Build a steady-running scenario with bounded telemetry noise."""
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(3):
+        steps.append(
+            (f"demand_drain_{i}", 8.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0))
+        )
+        steps.append(
+            (f"pump_fill_{i}", 12.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1))
+        )
+    return steps
+
+
 ANOMALY_PLANS: dict[str, AnomalyPlan] = {
     "benign_spike_01": [
         (
@@ -621,6 +663,13 @@ ANOMALY_PLANS: dict[str, AnomalyPlan] = {
         ("fill", DURATION_JITTER, {"fraction": 0.15}),
     ],
     "benign_setpoint_nudge_01": [("nudge", SETPOINT_NUDGE, {"delta": 0.5, "holds": 1})],
+    "benign_noise_01": [
+        (
+            "",
+            TELEMETRY_NOISE,
+            {"noise_scale": 0.2, "clamp_sigma": 3.0},
+        )
+    ],
 }
 """Benign-perturbation schedule per scenario.
 
@@ -636,6 +685,7 @@ NORMAL_SCENARIOS.update(
         "benign_spike_01": benign_spike_steps,
         "benign_duty_jitter_01": benign_duty_jitter_steps,
         "benign_setpoint_nudge_01": benign_setpoint_nudge_steps,
+        "benign_noise_01": benign_noise_steps,
     }
 )
 

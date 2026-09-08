@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from itertools import pairwise
 
 from .evaluation import events_for_scenario
-from .scenarios import NORMAL_SCENARIOS, run_scenario
+from .scenarios import ANOMALY_PLANS, NORMAL_SCENARIOS, TELEMETRY_NOISE, run_scenario
 
 FLOW_IN_PER_SECOND = 1.0
 FLOW_OUT_PER_SECOND = 0.35
@@ -58,15 +58,19 @@ def check_process_realism(scenario_id: str, seed: int = 42) -> RealismReport:
         KeyError: If ``scenario_id`` is not a registered scenario.
 
     """
-    result = run_scenario(scenario_id, seed=seed)
+    observed = run_scenario(scenario_id, seed=seed)
+    true = run_scenario(scenario_id, seed=seed, anomaly_plan=[])
     checks = [
-        _check_level_bounds(result.snapshots),
-        _check_flow_balance(result.snapshots),
-        _check_valve_pump_consistency(result.snapshots),
-        _check_bounded_slew(result.snapshots),
+        _check_level_bounds(true.snapshots),
+        _check_flow_balance(true.snapshots),
+        _check_valve_pump_consistency(true.snapshots),
+        _check_bounded_slew(true.snapshots),
     ]
     if scenario_id in NORMAL_SCENARIOS:
-        checks.append(_check_zero_violations(result.violations))
+        checks.append(_check_zero_violations(true.violations))
+    noise_check = _check_bounded_noise(scenario_id, observed.snapshots, true.snapshots)
+    if noise_check is not None:
+        checks.append(noise_check)
     checks.append(_check_monotonic_timestamps(scenario_id, seed))
     return RealismReport(scenario_id, all(ok for _, ok, _ in checks), checks)
 
@@ -144,6 +148,49 @@ def _check_zero_violations(violations: list[list[str]]) -> tuple[str, bool, str]
                 f"violations {step_violations} at step {index}",
             )
     return ("zero_violations", True, "no invariant violations reported")
+
+
+def _check_bounded_noise(
+    scenario_id: str,
+    observed: list[dict],
+    true: list[dict],
+) -> tuple[str, bool, str] | None:
+    """Assert observed telemetry stays within the registered noise clamp.
+
+    The check runs only for scenarios whose plan consists solely of
+    ``telemetry_noise`` entries; mixed plans change step durations or
+    fields in ways that make a per-step comparison invalid.
+
+    Args:
+        scenario_id: Scenario registry key used to find its anomaly plan.
+        observed: Observed snapshots after benign perturbation.
+        true: Unperturbed snapshots for the same scenario and seed.
+
+    Returns:
+        The check result, or ``None`` when no noise plan applies.
+
+    """
+    plan = ANOMALY_PLANS.get(scenario_id)
+    if not plan:
+        return None
+    noise_entries = [entry for entry in plan if entry[1] == TELEMETRY_NOISE]
+    if not noise_entries or len(noise_entries) != len(plan):
+        return None
+    clamp = max(
+        params.get("clamp_sigma", 3.0) * params["noise_scale"]
+        for _, _, params in noise_entries
+    )
+    for index, (obs, real) in enumerate(zip(observed, true, strict=True)):
+        for analog_field in ("tank_level", "flow_rate"):
+            deviation = abs(obs[analog_field] - real[analog_field])
+            if deviation > clamp:
+                return (
+                    "bounded_noise",
+                    False,
+                    f"{analog_field} deviation {deviation} exceeds {clamp} "
+                    f"at snapshot {index}",
+                )
+    return ("bounded_noise", True, "observed telemetry within noise clamp")
 
 
 def _check_monotonic_timestamps(scenario_id: str, seed: int) -> tuple[str, bool, str]:
