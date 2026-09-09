@@ -19,12 +19,22 @@ const POLL_MS = 2000;
 const SITE_NAME_KEY = "safeco.siteName";
 const DEFAULT_SITE_NAME = "Adupe Municipal Water Station";
 
+// Fetch a generous window so the operator can page through recent history
+// client-side; the API caps limit at 500.
+const LIST_LIMIT = 500;
+
 const API = {
   health: "/api/health",
   plant: "/api/plant/state",
-  events: "/api/events?limit=25",
-  alerts: "/api/alerts",
+  events: `/api/events?limit=${LIST_LIMIT}`,
+  alerts: `/api/alerts?limit=${LIST_LIMIT}`,
   scenarios: "/api/scenarios",
+};
+
+// Per-view pagination state. pageSize is a number, or "all" to show everything.
+const paging = {
+  alerts: { page: 1, pageSize: 10 },
+  events: { page: 1, pageSize: 20 },
 };
 
 const state = {
@@ -34,6 +44,72 @@ const state = {
   eventScenario: "",
   lastUpdated: null,
 };
+
+/**
+ * Return the slice of `items` for the current page of a paginated view, and
+ * update that view's page-status label and prev/next disabled state.
+ *
+ * Keeps the requested page within range (so deletions or filters never strand
+ * the operator on an empty page) and treats a pageSize of "all" as one page.
+ */
+function paginate(view, items) {
+  const cfg = paging[view];
+  const total = items.length;
+  const sizeAll = cfg.pageSize === "all";
+  const size = sizeAll ? Math.max(total, 1) : cfg.pageSize;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  if (cfg.page > pageCount) cfg.page = pageCount;
+  if (cfg.page < 1) cfg.page = 1;
+  const startIndex = (cfg.page - 1) * size;
+  const shown = items.slice(startIndex, startIndex + size);
+
+  const pager = document.querySelector(`[data-pager="${view}"]`);
+  if (pager) {
+    pager.hidden = total === 0;
+    const statusEl = pager.querySelector(`[data-page-status="${view}"]`);
+    if (total === 0) {
+      statusEl.textContent = "0 of 0";
+    } else {
+      const first = startIndex + 1;
+      const last = startIndex + shown.length;
+      statusEl.textContent =
+        `${first}–${last} of ${total}` +
+        (sizeAll ? "" : ` · page ${cfg.page}/${pageCount}`);
+    }
+    pager.querySelector(`[data-page-prev="${view}"]`).disabled =
+      sizeAll || cfg.page <= 1;
+    pager.querySelector(`[data-page-next="${view}"]`).disabled =
+      sizeAll || cfg.page >= pageCount;
+  }
+  return shown;
+}
+
+/** Wire the page-size selector and prev/next buttons for one paginated view. */
+function setupPager(view, rerender) {
+  const size = document.querySelector(`[data-page-size="${view}"]`);
+  if (size) {
+    size.addEventListener("change", () => {
+      const value = size.value;
+      paging[view].pageSize = value === "all" ? "all" : Number(value);
+      paging[view].page = 1;
+      rerender();
+    });
+  }
+  const prev = document.querySelector(`[data-page-prev="${view}"]`);
+  if (prev) {
+    prev.addEventListener("click", () => {
+      paging[view].page -= 1;
+      rerender();
+    });
+  }
+  const next = document.querySelector(`[data-page-next="${view}"]`);
+  if (next) {
+    next.addEventListener("click", () => {
+      paging[view].page += 1;
+      rerender();
+    });
+  }
+}
 
 async function getJSON(url) {
   const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -180,14 +256,17 @@ function renderEvents(rows) {
   const body = wrap.querySelector("tbody");
   body.textContent = "";
 
-  if (!rows || rows.length === 0) {
+  const all = rows || [];
+  if (all.length === 0) {
     empty.hidden = false;
     wrap.hidden = true;
+    paginate("events", all);
     return;
   }
   empty.hidden = true;
   wrap.hidden = false;
-  for (const ev of rows) {
+  const shown = paginate("events", all);
+  for (const ev of shown) {
     const tr = document.createElement("tr");
     const time = document.createElement("td");
     time.textContent = (ev.timestamp || "").replace("T", " ").slice(0, 19);
@@ -235,16 +314,18 @@ function renderAlerts(alerts) {
   const list = panel.querySelector(".alert-list");
   list.textContent = "";
 
-  const shown = filterAlerts(alerts);
-  if (!shown || shown.length === 0) {
+  const matched = filterAlerts(alerts);
+  if (!matched || matched.length === 0) {
     empty.hidden = false;
     empty.textContent =
       state.alertSearch || state.alertFilter !== "all"
         ? "No alerts match the current filter."
         : "No alerts. An empty queue is not proof of safety.";
+    paginate("alerts", matched || []);
     return;
   }
   empty.hidden = true;
+  const shown = paginate("alerts", matched);
   for (const alert of shown) list.appendChild(renderAlert(alert));
 }
 
@@ -376,6 +457,7 @@ function setupAlertControls() {
   for (const chip of document.querySelectorAll("[data-filter]")) {
     chip.addEventListener("click", () => {
       state.alertFilter = chip.dataset.filter;
+      paging.alerts.page = 1;
       for (const c of document.querySelectorAll("[data-filter]")) {
         c.classList.toggle("active", c === chip);
       }
@@ -385,8 +467,18 @@ function setupAlertControls() {
   const search = document.getElementById("alert-search");
   search.addEventListener("input", () => {
     state.alertSearch = search.value;
+    paging.alerts.page = 1;
     if (state.lastGood) renderAlerts(state.lastGood.alerts);
   });
+}
+
+/** Re-render one paginated view from the last good payload. */
+function rerenderAlerts() {
+  if (state.lastGood) renderAlerts(state.lastGood.alerts);
+}
+
+function rerenderEvents() {
+  if (state.lastGood) renderEvents(state.lastGood.events);
 }
 
 /* ---------- Health view ---------- */
@@ -463,13 +555,14 @@ function setupEventFilter() {
   const input = document.getElementById("event-scenario-filter");
   input.addEventListener("input", () => {
     state.eventScenario = input.value.trim();
+    paging.events.page = 1;
     refresh();
   });
 }
 
 function eventsUrl() {
   return state.eventScenario
-    ? `/api/events?limit=25&scenario_id=${encodeURIComponent(state.eventScenario)}`
+    ? `/api/events?limit=${LIST_LIMIT}&scenario_id=${encodeURIComponent(state.eventScenario)}`
     : API.events;
 }
 
@@ -536,6 +629,8 @@ function start() {
   setupSiteName();
   setupAlertControls();
   setupEventFilter();
+  setupPager("alerts", rerenderAlerts);
+  setupPager("events", rerenderEvents);
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
   document.getElementById("refresh-btn").addEventListener("click", refresh);
   loadScenarios();

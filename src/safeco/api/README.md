@@ -70,7 +70,6 @@ refreshes immediately after any operator action.
   with a copy button, explanation, evidence, a confidence meter, and recommended
   action, with a record-only acknowledge button.
 - **Events**: the recent event feed with a scenario filter and ground-truth labels.
-- **Scenarios**: run a scenario by id and seed and see the run summary.
 - **System health**: feed status, visibility, database availability, total events
   collected, and the last event timestamp.
 

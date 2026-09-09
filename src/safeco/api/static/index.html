@@ -105,6 +105,24 @@
             </div>
             <p class="muted" data-empty>No alerts. An empty queue is not proof of safety.</p>
             <ul class="alert-list"></ul>
+            <div class="pager" data-pager="alerts" hidden>
+              <label class="inline">
+                Show
+                <select data-page-size="alerts">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="all">All</option>
+                </select>
+                per page
+              </label>
+              <div class="pager-nav">
+                <button type="button" class="ghost" data-page-prev="alerts">Prev</button>
+                <span class="pager-status" data-page-status="alerts">—</span>
+                <button type="button" class="ghost" data-page-next="alerts">Next</button>
+              </div>
+            </div>
           </section>
 
           <section id="events" class="panel" data-panel="events" hidden>
@@ -132,6 +150,24 @@
                 </thead>
                 <tbody></tbody>
               </table>
+            </div>
+            <div class="pager" data-pager="events" hidden>
+              <label class="inline">
+                Show
+                <select data-page-size="events">
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                  <option value="all">All</option>
+                </select>
+                per page
+              </label>
+              <div class="pager-nav">
+                <button type="button" class="ghost" data-page-prev="events">Prev</button>
+                <span class="pager-status" data-page-status="events">—</span>
+                <button type="button" class="ghost" data-page-next="events">Next</button>
+              </div>
             </div>
           </section>
 

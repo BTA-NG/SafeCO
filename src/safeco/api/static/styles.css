@@ -709,6 +709,37 @@ button:hover {
   margin-top: 11px;
 }
 
+/* Pagination */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pager-status {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 12ch;
+  text-align: center;
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 footer {
   padding: 16px 22px;
   border-top: 1px solid var(--line);

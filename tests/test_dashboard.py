@@ -58,6 +58,25 @@ def test_dashboard_has_health_view() -> None:
     assert 'id="health-page"' in body
 
 
+def test_dashboard_has_pagination_controls() -> None:
+    """Events and Alerts expose a per-page size selector and page nav."""
+    body = client.get("/").text
+    # A page-size selector per paginated view, offering 5/10/20/50/All.
+    assert body.count("data-page-size") >= 2
+    for size in ("5", "10", "20", "50", "all"):
+        assert f'value="{size}"' in body
+    # Prev/next page controls per paginated view.
+    assert body.count("data-page-prev") >= 2
+    assert body.count("data-page-next") >= 2
+
+
+def test_dashboard_script_implements_pagination() -> None:
+    """The client paginates client-side over the fetched list."""
+    script = client.get("/static/app.js").text
+    assert "pageSize" in script
+    assert "page" in script
+
+
 def test_dashboard_alerts_view_supports_ack_filter_and_id_search() -> None:
     """Operators can view acknowledged alerts and search by alert id."""
     body = client.get("/").text
