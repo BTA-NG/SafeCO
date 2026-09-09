@@ -33,7 +33,10 @@ def test_execute_emits_one_snapshot_per_step_and_forwards_commands():
     try:
         snaps, cmds = [], []
         result = run_scenario(
-            "_demo", seed=42, on_command=cmds.append, on_snapshot=snaps.append
+            "_demo",
+            seed=42,
+            on_command=lambda command, state: cmds.append(command),
+            on_snapshot=snaps.append,
         )
     finally:
         del NORMAL_SCENARIOS["_demo"]

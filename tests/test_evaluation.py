@@ -126,6 +126,32 @@ def test_evaluation_trace_timestamps_are_deterministic_and_monotonic(tmp_path):
     assert first_timestamps == sorted(first_timestamps)
 
 
+def test_registered_anomaly_changes_evaluated_event_features(tmp_path):
+    noisy = events_for_scenario(
+        "benign_noise_01",
+        seed=42,
+        database=tmp_path / "noisy.db",
+    )
+    clean = events_for_scenario(
+        "benign_noise_01",
+        seed=42,
+        database=tmp_path / "clean.db",
+        anomaly_plan=[],
+    )
+    assert len(noisy.events) == len(clean.events) > 0
+    assert [
+        (event.command, event.target, event.value, event.mode, event.sequence_id)
+        for event in noisy.events
+    ] == [
+        (event.command, event.target, event.value, event.mode, event.sequence_id)
+        for event in clean.events
+    ]
+    assert noisy.event_elapsed_s == clean.event_elapsed_s
+    assert [event.process.tank_level for event in noisy.events] != [
+        event.process.tank_level for event in clean.events
+    ]
+
+
 def test_held_out_evaluation_runs_without_tuning_scenarios():
     report = evaluate_scenarios(HELD_OUT_SCENARIOS)
     assert {result.scenario_id for result in report.scenarios} == set(

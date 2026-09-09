@@ -162,7 +162,8 @@ def _execute(
         seed: Random seed forwarded to ``PlantSimulator``.
         steps: Ordered list of ``(phase, seconds, action)`` tuples.
         ground_truth: Ground-truth label for the resulting ``ScenarioResult``.
-        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_command: Optional callback invoked with each ``CommandRecord``
+            and the simulator's current ``PlantState`` at command time.
         on_snapshot: Optional callback invoked with each snapshot dict.
         anomaly_plan: Optional benign-perturbation schedule. ``None`` or an
             empty plan reproduces the base scenario exactly.
@@ -173,7 +174,12 @@ def _execute(
 
     """
     sim = PlantSimulator(seed=seed)
-    sim.on_command = on_command
+
+    def notify_command(record: CommandRecord) -> None:
+        if on_command is not None:
+            on_command(record, sim.state)
+
+    sim.on_command = notify_command
     result = ScenarioResult(scenario_id, seed, ground_truth=ground_truth)
     anomaly_rng = _anomaly_rng(seed, scenario_id) if anomaly_plan else None
     counters = [0] * len(anomaly_plan or [])
@@ -308,7 +314,8 @@ def run_scenario(
     Args:
         name: Scenario registry key (e.g. ``"startup_01"``).
         seed: Random seed for reproducibility.
-        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_command: Optional callback invoked with each ``CommandRecord``
+            and the simulator's current ``PlantState`` at command time.
         on_snapshot: Optional callback invoked with each snapshot dict.
         anomaly_plan: Optional benign-perturbation schedule forwarded to
             ``_execute``.
