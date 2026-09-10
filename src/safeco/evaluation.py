@@ -24,11 +24,11 @@ from .detector import detect
 from .events import Event, ProcessSnapshot
 from .plant import PlantState
 from .scenarios import (
+    ATTACK_JITTER_SCENARIOS,
     ATTACK_SCENARIOS,
     GROUND_TRUTH,
     NORMAL_SCENARIOS,
     AnomalyPlan,
-    Step,
     run_scenario,
 )
 from .simulator import CommandRecord
@@ -42,11 +42,17 @@ EXPECTED_ATTACK_ALERTS: dict[str, ReasonCode] = {
     "attack_replay_01": ReasonCode.COMMAND_REPLAY,
     "attack_mistimed_01": ReasonCode.RECOVERY_OUT_OF_SEQUENCE,
     "attack_drift_01": ReasonCode.SETPOINT_DRIFT,
+    "attack_injection_jitter_01": ReasonCode.UNSAFE_PUMP_START,
+    "attack_replay_jitter_01": ReasonCode.COMMAND_REPLAY,
+    "attack_mistimed_jitter_01": ReasonCode.RECOVERY_OUT_OF_SEQUENCE,
+    "attack_drift_jitter_01": ReasonCode.SETPOINT_DRIFT,
 }
 """Expected primary detector reason for each required attack scenario."""
 
 BENIGN_EVALUATION_SCENARIOS: tuple[str, ...] = tuple(sorted(NORMAL_SCENARIOS))
-ATTACK_EVALUATION_SCENARIOS: tuple[str, ...] = tuple(sorted(ATTACK_SCENARIOS))
+ATTACK_EVALUATION_SCENARIOS: tuple[str, ...] = tuple(
+    sorted({*ATTACK_SCENARIOS, *ATTACK_JITTER_SCENARIOS})
+)
 DEFAULT_EVALUATION_SCENARIOS: tuple[str, ...] = (
     *BENIGN_EVALUATION_SCENARIOS,
     *ATTACK_EVALUATION_SCENARIOS,
@@ -143,15 +149,6 @@ class EvaluationComparison:
     with_baseline: EvaluationReport
 
 
-def _scenario_steps(scenario_id: str) -> list[Step]:
-    """Return the registered steps for a normal or attack scenario."""
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
-    try:
-        return scenarios[scenario_id]()
-    except KeyError as exc:
-        raise KeyError(f"unknown scenario {scenario_id!r}") from exc
-
-
 def _is_actionable(alert: Alert) -> bool:
     """Return whether an alert should count as an operator-facing finding."""
     return SEVERITY_RANK[Severity(alert.severity)] > SEVERITY_RANK[Severity.LOW]
@@ -225,53 +222,59 @@ def events_for_scenario(
                 anomaly_plan=anomaly_plan,
             )
 
-    steps = _scenario_steps(scenario_id)
     store = EventStore(database)
     collector = EventCollector(store, scenario_id, seed=seed)
     ground_truth = GROUND_TRUTH.get(scenario_id, "normal")
     events: list[Event] = []
     event_elapsed_s: list[float] = []
-    base_elapsed_s: list[float] = []
-    elapsed_s = 0.0
-    for _, seconds, _ in steps:
-        base_elapsed_s.append(elapsed_s)
-        elapsed_s += seconds
+    step_of_event: list[int] = []
     pending: list[tuple[CommandRecord, PlantState]] = []
     step_index = 0
+    is_attack = (
+        scenario_id in ATTACK_SCENARIOS or scenario_id in ATTACK_JITTER_SCENARIOS
+    )
 
     def on_command(command: CommandRecord, state: PlantState) -> None:
         pending.append((command, replace(state)))
 
     def on_snapshot(snapshot: dict[str, Any]) -> None:
         nonlocal step_index
-        step_elapsed_s = base_elapsed_s[step_index]
         for command, state in pending:
             event = collector.record_simulator_command(
                 None,
                 command,
-                source="attacker" if scenario_id in ATTACK_SCENARIOS else "scheduler",
+                source="attacker" if is_attack else "scheduler",
                 ground_truth=ground_truth,
                 process=_process_at(state, snapshot),
             )
-            stamped = _TRACE_EPOCH + timedelta(seconds=step_elapsed_s)
-            events.append(replace(event, timestamp=stamped.isoformat()))
-            event_elapsed_s.append(step_elapsed_s)
+            events.append(event)
+            step_of_event.append(step_index)
         pending.clear()
         step_index += 1
 
-    run_scenario(
+    result = run_scenario(
         scenario_id,
         seed,
         anomaly_plan=anomaly_plan,
         on_command=on_command,
         on_snapshot=on_snapshot,
     )
+    step_starts: list[float] = []
+    elapsed_s = 0.0
+    for duration in result.step_durations:
+        step_starts.append(elapsed_s)
+        elapsed_s += duration
+    for index, event in enumerate(events):
+        step_elapsed_s = step_starts[step_of_event[index]]
+        stamped = _TRACE_EPOCH + timedelta(seconds=step_elapsed_s)
+        events[index] = replace(event, timestamp=stamped.isoformat())
+        event_elapsed_s.append(step_elapsed_s)
     store.close()
     return ScenarioTrace(
         scenario_id=scenario_id,
         ground_truth=ground_truth,
         seed=seed,
-        duration_s=sum(seconds for _, seconds, _ in steps),
+        duration_s=elapsed_s,
         events=tuple(events),
         event_elapsed_s=tuple(event_elapsed_s),
     )

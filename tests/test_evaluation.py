@@ -1,3 +1,5 @@
+import pytest
+
 from safeco.alerts import ReasonCode
 from safeco.evaluation import (
     ATTACK_EVALUATION_SCENARIOS,
@@ -16,11 +18,19 @@ from safeco.evaluation import (
     sample_evidence_pairs,
     train_baseline_for_evaluation,
 )
-from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
+from safeco.scenarios import (
+    ATTACK_JITTER_SCENARIOS,
+    ATTACK_SCENARIOS,
+    NORMAL_SCENARIOS,
+    run_scenario,
+)
 
 
 def test_expected_attack_mapping_covers_all_attack_scenarios():
-    assert set(EXPECTED_ATTACK_ALERTS) == set(ATTACK_SCENARIOS)
+    assert set(EXPECTED_ATTACK_ALERTS) == {
+        *ATTACK_SCENARIOS,
+        *ATTACK_JITTER_SCENARIOS,
+    }
 
 
 def test_evaluation_splits_do_not_overlap():
@@ -47,10 +57,14 @@ def test_default_baseline_training_excludes_validation_and_held_out_scenarios():
 
 def test_default_evaluation_scenarios_cover_registries():
     assert set(BENIGN_EVALUATION_SCENARIOS) == set(NORMAL_SCENARIOS)
-    assert set(ATTACK_EVALUATION_SCENARIOS) == set(ATTACK_SCENARIOS)
+    assert set(ATTACK_EVALUATION_SCENARIOS) == {
+        *ATTACK_SCENARIOS,
+        *ATTACK_JITTER_SCENARIOS,
+    }
     assert set(DEFAULT_EVALUATION_SCENARIOS) == {
         *NORMAL_SCENARIOS,
         *ATTACK_SCENARIOS,
+        *ATTACK_JITTER_SCENARIOS,
     }
 
 
@@ -83,7 +97,7 @@ def test_evaluation_report_computes_recall_and_precision():
     assert report.precision == 1.0
     assert report.false_alerts_per_normal_hour == 0.0
     assert report.missed_attacks == ()
-    assert report.classification.true_positive == len(ATTACK_SCENARIOS)
+    assert report.classification.true_positive == len(ATTACK_EVALUATION_SCENARIOS)
     assert report.classification.false_positive == 0
     assert report.classification.false_negative == 0
     assert report.classification.true_negative == len(NORMAL_SCENARIOS)
@@ -150,6 +164,50 @@ def test_registered_anomaly_changes_evaluated_event_features(tmp_path):
     assert [event.process.tank_level for event in noisy.events] != [
         event.process.tank_level for event in clean.events
     ]
+
+
+def test_detection_latency_matches_perturbed_timeline(tmp_path):
+    scenario_id = "attack_injection_jitter_01"
+    base_durations = [
+        seconds for _, seconds, _ in ATTACK_JITTER_SCENARIOS[scenario_id]()
+    ]
+    result = run_scenario(scenario_id, seed=42)
+    assert result.step_durations != base_durations
+
+    trace = events_for_scenario(scenario_id, seed=42, database=tmp_path / "trace.db")
+    assert trace.duration_s == pytest.approx(sum(result.step_durations))
+    assert trace.event_elapsed_s
+    assert trace.event_elapsed_s[0] == pytest.approx(result.step_durations[0])
+    assert trace.event_elapsed_s[0] != pytest.approx(base_durations[0])
+
+    second = events_for_scenario(scenario_id, seed=42, database=tmp_path / "b.db")
+    first_timestamps = [event.timestamp for event in trace.events]
+    assert first_timestamps == [event.timestamp for event in second.events]
+    assert first_timestamps == sorted(first_timestamps)
+
+
+def test_jitter_variants_share_base_attack_reasons():
+    base_to_jitter = {
+        "attack_injection_01": "attack_injection_jitter_01",
+        "attack_replay_01": "attack_replay_jitter_01",
+        "attack_mistimed_01": "attack_mistimed_jitter_01",
+        "attack_drift_01": "attack_drift_jitter_01",
+    }
+    for base, variant in base_to_jitter.items():
+        assert EXPECTED_ATTACK_ALERTS[base] == EXPECTED_ATTACK_ALERTS[variant]
+
+
+def test_jitter_variants_included_in_evaluation(tmp_path):
+    profile = train_baseline_for_evaluation()
+    for scenario_id in ATTACK_JITTER_SCENARIOS:
+        result = evaluate_scenario(
+            scenario_id,
+            baseline_profile=profile,
+            database=tmp_path / f"{scenario_id}.db",
+        )
+        assert result.classification == "TP"
+        assert result.detected_expected is True
+        assert result.expected_reason_code == EXPECTED_ATTACK_ALERTS[scenario_id]
 
 
 def test_held_out_evaluation_runs_without_tuning_scenarios():

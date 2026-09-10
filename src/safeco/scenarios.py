@@ -93,6 +93,9 @@ class ScenarioResult:
             and the step's ``phase`` name.
         violations: Per-step lists of invariant violations returned by
             ``PlantSimulator.step``.
+        step_durations: Actual simulated duration of each step, already run
+            through any ``DURATION_JITTER`` perturbation. One entry per step,
+            in step order.
 
     """
 
@@ -103,6 +106,7 @@ class ScenarioResult:
     commands: list[CommandRecord] = field(default_factory=list)
     snapshots: list[dict] = field(default_factory=list)
     violations: list[list[str]] = field(default_factory=list)
+    step_durations: list[float] = field(default_factory=list)
 
     @property
     def final_state(self) -> dict:
@@ -114,8 +118,9 @@ def scenario_fingerprint(result: ScenarioResult) -> str:
     """Compute a SHA-256 fingerprint proving seed-reproducibility.
 
     The fingerprint is computed over a canonical JSON representation of
-    the result's metadata, commands, and snapshots. Two runs with the
-    same seed and generator version always produce the same fingerprint.
+    the result's metadata, commands, snapshots, and step durations. Two
+    runs with the same seed and generator version always produce the
+    same fingerprint.
 
     Args:
         result: A completed ``ScenarioResult`` to fingerprint.
@@ -131,6 +136,7 @@ def scenario_fingerprint(result: ScenarioResult) -> str:
         "ground_truth": result.ground_truth,
         "commands": [asdict(c) for c in result.commands],
         "snapshots": result.snapshots,
+        "step_durations": result.step_durations,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -185,6 +191,7 @@ def _execute(
     counters = [0] * len(anomaly_plan or [])
     for phase, seconds, action in steps:
         step_seconds = _perturbed_duration(phase, seconds, anomaly_plan, anomaly_rng)
+        result.step_durations.append(step_seconds)
         if action is not None:
             action(sim)
         result.violations.append(sim.step(step_seconds))
