@@ -118,7 +118,7 @@ def test_setpoint_nudge_self_corrects():
     assert anom_targets[-1] == base_targets[-1] == 70.0
 
 
-def test_generator_version_includes_1_2():
+def test_generator_version_includes_1_3():
     from safeco.scenarios import GENERATOR_VERSION
 
-    assert "1.2" in GENERATOR_VERSION
+    assert "1.3" in GENERATOR_VERSION
