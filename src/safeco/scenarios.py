@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from .plant import OperatingMode, PowerSource, Register
 from .simulator import CommandRecord, PlantSimulator
 
-GENERATOR_VERSION = "safeco-scenarios/1.2"
+GENERATOR_VERSION = "safeco-scenarios/1.3"
 """Version tag recorded in every ``ScenarioResult`` for dataset provenance."""
 
 GROUND_TRUTH: dict[str, str] = {
@@ -38,6 +38,10 @@ GROUND_TRUTH: dict[str, str] = {
     "attack_baseline_low_tank_01": "baseline_anomaly",
     "attack_baseline_high_limit_01": "baseline_anomaly",
     "attack_baseline_mode_context_01": "baseline_anomaly",
+    "attack_injection_jitter_01": "injection",
+    "attack_replay_jitter_01": "replay",
+    "attack_mistimed_jitter_01": "mistimed",
+    "attack_drift_jitter_01": "drift",
 }
 """Override map for ground-truth labels.
 
@@ -50,6 +54,7 @@ Step = tuple[str, float, Callable[[PlantSimulator], None] | None]
 SENSOR_SPIKE = "sensor_spike"
 DURATION_JITTER = "duration_jitter"
 SETPOINT_NUDGE = "setpoint_nudge"
+TELEMETRY_NOISE = "telemetry_noise"
 """Benign-anomaly kinds understood by ``_execute``."""
 
 Anomaly = tuple[str, str, dict]
@@ -63,6 +68,9 @@ Kinds and params:
   step's simulated duration by up to ``fraction``.
 - ``setpoint_nudge``: ``{"match": str, "delta": float, "holds": int}`` —
   offset the observed target level for a few self-correcting steps.
+- ``telemetry_noise``: ``{"match": str, "noise_scale": float,
+  "clamp_sigma": float}`` — add gaussian noise to observed analog fields
+  on every matching step, clamped to ``clamp_sigma`` standard deviations.
 """
 
 AnomalyPlan = list[Anomaly]
@@ -85,6 +93,9 @@ class ScenarioResult:
             and the step's ``phase`` name.
         violations: Per-step lists of invariant violations returned by
             ``PlantSimulator.step``.
+        step_durations: Actual simulated duration of each step, already run
+            through any ``DURATION_JITTER`` perturbation. One entry per step,
+            in step order.
 
     """
 
@@ -95,6 +106,7 @@ class ScenarioResult:
     commands: list[CommandRecord] = field(default_factory=list)
     snapshots: list[dict] = field(default_factory=list)
     violations: list[list[str]] = field(default_factory=list)
+    step_durations: list[float] = field(default_factory=list)
 
     @property
     def final_state(self) -> dict:
@@ -106,8 +118,9 @@ def scenario_fingerprint(result: ScenarioResult) -> str:
     """Compute a SHA-256 fingerprint proving seed-reproducibility.
 
     The fingerprint is computed over a canonical JSON representation of
-    the result's metadata, commands, and snapshots. Two runs with the
-    same seed and generator version always produce the same fingerprint.
+    the result's metadata, commands, snapshots, and step durations. Two
+    runs with the same seed and generator version always produce the
+    same fingerprint.
 
     Args:
         result: A completed ``ScenarioResult`` to fingerprint.
@@ -123,6 +136,7 @@ def scenario_fingerprint(result: ScenarioResult) -> str:
         "ground_truth": result.ground_truth,
         "commands": [asdict(c) for c in result.commands],
         "snapshots": result.snapshots,
+        "step_durations": result.step_durations,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -154,7 +168,8 @@ def _execute(
         seed: Random seed forwarded to ``PlantSimulator``.
         steps: Ordered list of ``(phase, seconds, action)`` tuples.
         ground_truth: Ground-truth label for the resulting ``ScenarioResult``.
-        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_command: Optional callback invoked with each ``CommandRecord``
+            and the simulator's current ``PlantState`` at command time.
         on_snapshot: Optional callback invoked with each snapshot dict.
         anomaly_plan: Optional benign-perturbation schedule. ``None`` or an
             empty plan reproduces the base scenario exactly.
@@ -165,18 +180,24 @@ def _execute(
 
     """
     sim = PlantSimulator(seed=seed)
-    sim.on_command = on_command
+
+    def notify_command(record: CommandRecord) -> None:
+        if on_command is not None:
+            on_command(record, sim.state)
+
+    sim.on_command = notify_command
     result = ScenarioResult(scenario_id, seed, ground_truth=ground_truth)
     anomaly_rng = _anomaly_rng(seed, scenario_id) if anomaly_plan else None
     counters = [0] * len(anomaly_plan or [])
     for phase, seconds, action in steps:
         step_seconds = _perturbed_duration(phase, seconds, anomaly_plan, anomaly_rng)
+        result.step_durations.append(step_seconds)
         if action is not None:
             action(sim)
         result.violations.append(sim.step(step_seconds))
         snap = sim.snapshot()
         snap["phase"] = phase
-        snap = _perturbed_observed(snap, phase, anomaly_plan, counters)
+        snap = _perturbed_observed(snap, phase, anomaly_plan, counters, anomaly_rng)
         result.snapshots.append(snap)
         if on_snapshot is not None:
             on_snapshot(snap)
@@ -210,6 +231,7 @@ def _perturbed_observed(
     phase: str,
     plan: AnomalyPlan | None,
     counters: list[int],
+    rng: random.Random | None,
 ) -> dict:
     """Return the observed snapshot after benign telemetry perturbations.
 
@@ -228,6 +250,8 @@ def _perturbed_observed(
         elif kind == SETPOINT_NUDGE and counters[index] < params["holds"]:
             observed = _apply_setpoint_nudge(observed, params)
             counters[index] += 1
+        elif kind == TELEMETRY_NOISE and rng is not None:
+            observed = _apply_telemetry_noise(observed, params, rng)
     return observed
 
 
@@ -257,6 +281,28 @@ def _apply_setpoint_nudge(snapshot: dict, params: dict) -> dict:
     return observed
 
 
+def _apply_telemetry_noise(
+    snapshot: dict,
+    params: dict,
+    rng: random.Random,
+) -> dict:
+    """Return an observed-snapshot copy with clamped gaussian telemetry noise.
+
+    Noise is drawn per matching step from the scenario RNG, so the whole
+    trace stays reproducible. The ``clamp_sigma`` bound keeps a single
+    spurious reading inside the physical register range.
+    """
+    observed = dict(snapshot)
+    scale = params["noise_scale"]
+    clamp = params.get("clamp_sigma", 3.0) * scale
+    for analog_field in ("tank_level", "flow_rate"):
+        delta = rng.gauss(0.0, scale)
+        while abs(delta) > clamp:
+            delta = rng.gauss(0.0, scale)
+        observed[analog_field] = observed[analog_field] + delta
+    return observed
+
+
 NORMAL_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}  # filled by Tasks 5-6
 ATTACK_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}
 """Deterministic attack scenario registry kept separate from benign data."""
@@ -275,7 +321,8 @@ def run_scenario(
     Args:
         name: Scenario registry key (e.g. ``"startup_01"``).
         seed: Random seed for reproducibility.
-        on_command: Optional callback invoked with each ``CommandRecord``.
+        on_command: Optional callback invoked with each ``CommandRecord``
+            and the simulator's current ``PlantState`` at command time.
         on_snapshot: Optional callback invoked with each snapshot dict.
         anomaly_plan: Optional benign-perturbation schedule forwarded to
             ``_execute``.
@@ -287,10 +334,11 @@ def run_scenario(
         KeyError: If ``name`` is not found in the registry.
 
     """
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
     if name not in scenarios:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
-    plan = anomaly_plan if anomaly_plan is not None else ANOMALY_PLANS.get(name)
+    plans = {**ANOMALY_PLANS, **ATTACK_JITTER_PLANS}
+    plan = anomaly_plan if anomaly_plan is not None else plans.get(name)
     return _execute(
         name,
         seed,
@@ -300,6 +348,30 @@ def run_scenario(
         on_snapshot=on_snapshot,
         anomaly_plan=plan,
     )
+
+
+def observed_state_snapshots(scenario_id: str, seed: int = 42) -> list[dict]:
+    """Return the observed snapshot series for a scenario, after perturbation.
+
+    This is the handoff seam for the evaluation harness: it exposes exactly
+    what ``run_scenario`` produced with the scenario's registered plan (noise,
+    spike, jitter, or none). Joseph's ``events_for_scenario`` should map these
+    observed values onto ``Event.process`` when baseline metrics must exercise
+    the anomalies (the denoised ``PlantState`` values remain available via
+    ``run_scenario(..., anomaly_plan=[]).snapshots``).
+
+    Args:
+        scenario_id: Scenario registry key.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Observed snapshots with the registered plan applied.
+
+    Raises:
+        KeyError: If ``scenario_id`` is not a registered scenario.
+
+    """
+    return run_scenario(scenario_id, seed=seed).snapshots
 
 
 def startup_steps() -> list[Step]:
@@ -608,6 +680,19 @@ def benign_setpoint_nudge_steps() -> list[Step]:
     ]
 
 
+def benign_noise_steps() -> list[Step]:
+    """Build a steady-running scenario with bounded telemetry noise."""
+    steps: list[Step] = [("configure_running", 1.0, _configure_running)]
+    for i in range(3):
+        steps.append(
+            (f"demand_drain_{i}", 8.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 0))
+        )
+        steps.append(
+            (f"pump_fill_{i}", 12.0, lambda s: s.apply_coil(Register.PUMP_COMMAND, 1))
+        )
+    return steps
+
+
 ANOMALY_PLANS: dict[str, AnomalyPlan] = {
     "benign_spike_01": [
         (
@@ -621,6 +706,13 @@ ANOMALY_PLANS: dict[str, AnomalyPlan] = {
         ("fill", DURATION_JITTER, {"fraction": 0.15}),
     ],
     "benign_setpoint_nudge_01": [("nudge", SETPOINT_NUDGE, {"delta": 0.5, "holds": 1})],
+    "benign_noise_01": [
+        (
+            "",
+            TELEMETRY_NOISE,
+            {"noise_scale": 0.2, "clamp_sigma": 3.0},
+        )
+    ],
 }
 """Benign-perturbation schedule per scenario.
 
@@ -636,6 +728,7 @@ NORMAL_SCENARIOS.update(
         "benign_spike_01": benign_spike_steps,
         "benign_duty_jitter_01": benign_duty_jitter_steps,
         "benign_setpoint_nudge_01": benign_setpoint_nudge_steps,
+        "benign_noise_01": benign_noise_steps,
     }
 )
 
@@ -650,6 +743,37 @@ ATTACK_SCENARIOS.update(
         "attack_baseline_mode_context_01": attack_baseline_mode_context_steps,
     }
 )
+
+ATTACK_JITTER_SCENARIOS: dict[str, Callable[[], list[Step]]] = {
+    "attack_injection_jitter_01": attack_injection_steps,
+    "attack_replay_jitter_01": attack_replay_steps,
+    "attack_mistimed_jitter_01": attack_mistimed_steps,
+    "attack_drift_jitter_01": attack_drift_steps,
+}
+"""Timing-jitter attack variants.
+
+Each entry reuses the base attack's step factory; ``ATTACK_JITTER_PLANS``
+varies the duration of approach phases so the unsafe command lands at a
+different, still-reproducible offset. Kept separate from ``ATTACK_SCENARIOS``
+so Joseph's exact-set assertion and eval id->reason mapping stay valid until
+he opts the variants in.
+"""
+
+ATTACK_JITTER_PLANS: dict[str, AnomalyPlan] = {
+    "attack_injection_jitter_01": [
+        ("initial_shutdown", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_replay_jitter_01": [
+        ("close_inlet_for_service", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_mistimed_jitter_01": [
+        ("force_recovery_without_power", DURATION_JITTER, {"fraction": 0.6})
+    ],
+    "attack_drift_jitter_01": [
+        ("attacker_raise_target", DURATION_JITTER, {"fraction": 0.6})
+    ],
+}
+"""Jitter plan per timing-variation variant (see ``ATTACK_JITTER_SCENARIOS``)."""
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -669,7 +793,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fingerprint", action="store_true")
     args = parser.parse_args(argv)
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
     if args.name not in scenarios:
         print(
             f"error: unknown scenario {args.name!r}; known: {sorted(scenarios)}",

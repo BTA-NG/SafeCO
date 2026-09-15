@@ -178,6 +178,25 @@ PYTHONPATH=src .venv/bin/python -m safeco.runtime
 | `benign_spike_01` | transient +3% tank-level blip, self-restoring | ~12s | None |
 | `benign_duty_jitter_01` | drain/fill durations jittered ±15% | ~61s | None |
 | `benign_setpoint_nudge_01` | observed target-level +0.5% blip, restore | ~9s | None |
+| `benign_noise_01` | steady running + bounded telemetry noise (3σ-clamped) | ~61s | None |
+| `attack_injection_jitter_01` | injection, approach timing varied | ~2s | None* |
+| `attack_replay_jitter_01` | replay, service-window timing varied | ~5s | None* |
+| `attack_mistimed_jitter_01` | mistimed startup, pre-condition timing varied | ~5s | None* |
+| `attack_drift_jitter_01` | 7× +1% target drift, cadence varied | ~21s | None* |
+
+\* No `PlantState.validate` violations — these attacks are detected by detector
+rules (`recovery_out_of_sequence`, `setpoint_drift`), not by the invariant
+validator. Timing-jitter variants keep the same commands and violation set as
+their base attack, only the when changes.
+
+## Evaluation handoff (simulator → detector)
+
+Scenario planner exposes **observed** snapshots — post-noise/perturbation — via
+`safeco.scenarios.observed_state_snapshots(scenario_id, seed)`. The shared
+`Event.process` (built in `collector.py`) is currently the denoised true state.
+To exercise noise/anomaly plans through the baseline detector, map the observed
+snapshots onto `Event.process` inside `events_for_scenario`; keep the true-state
+values reachable via `run_scenario(..., anomaly_plan=[]).snapshots`.
 
 ## Coding Standards
 
@@ -231,6 +250,6 @@ These files define the system's shared interface. Changes require Daniel's revie
 | 1 | Foundation (simulator + 4 normal scenarios) | ✅ Done |
 | 2 | Normal plant & data (maintenance, extended normal, CLI, fingerprints) | ✅ Done |
 | 3 | Attacks (injection, replay, mistimed valid, slow drift) | ✅ Done |
-| 4 | Detector support (process realism validation) | ⬜ 1–7 Sep (benign anomalies + realism evidence) |
-| 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep |
+| 4 | Detector support (process realism validation) | ✅ Done |
+| 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep (in progress) |
 | 6 | Submission (4-page report, architecture figures, demo) | ⬜ 15–20 Sep |
