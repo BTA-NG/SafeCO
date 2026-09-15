@@ -72,3 +72,35 @@ def test_run_fingerprint_matches_canonical_run_scenario(client) -> None:
     endpoint = client.post("/api/scenarios/startup_01/run", params={"seed": 5}).json()
     canonical = scenario_fingerprint(run_scenario("startup_01", seed=5))
     assert endpoint["fingerprint"] == canonical
+
+
+def test_run_jitter_variant_composes_canonical_run_scenario(client) -> None:
+    """A timing-jitter attack variant runs via POST and matches run_scenario.
+
+    The jitter variants live only in ``ATTACK_JITTER_SCENARIOS`` and reuse their
+    base attack's steps; only the registered ``DURATION_JITTER`` plan differs.
+    The endpoint must compose ``run_scenario`` (not re-implement the step loop
+    against a partial registry), so:
+
+    * the variant is runnable at all — the old hand-rolled registry 404'd it;
+    * its fingerprint matches the canonical ``run_scenario`` for that id; and
+    * applying the jitter plan makes its trace diverge from the un-jittered
+      base at the same seed (proof the plan is actually applied, not dropped).
+    """
+    from safeco.scenarios import run_scenario, scenario_fingerprint
+
+    response = client.post(
+        "/api/scenarios/attack_injection_jitter_01/run", params={"seed": 7}
+    )
+    assert response.status_code == 200
+    jitter = response.json()
+    assert jitter["scenario_id"] == "attack_injection_jitter_01"
+    assert jitter["ground_truth"] == "injection"
+
+    canonical = scenario_fingerprint(run_scenario("attack_injection_jitter_01", seed=7))
+    assert jitter["fingerprint"] == canonical
+
+    base = client.post(
+        "/api/scenarios/attack_injection_01/run", params={"seed": 7}
+    ).json()
+    assert jitter["fingerprint"] != base["fingerprint"]
