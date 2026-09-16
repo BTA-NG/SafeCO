@@ -134,6 +134,21 @@ class EventStore:
                 "SELECT * FROM events WHERE event_id = ?", (event_id,)
             ).fetchone()
 
+    def count_events(self) -> int:
+        """Return the total number of events stored.
+
+        The health endpoint reports this so the dashboard can show how much
+        history has been collected, distinct from ``list_events`` which only
+        returns a bounded, newest-first page.
+
+        Returns:
+            The total row count in the events table.
+
+        """
+        with self._lock:
+            row = self.connection.execute("SELECT COUNT(*) FROM events").fetchone()
+        return int(row[0])
+
     def events_after(self, event_id: str, limit: int = 100) -> list[sqlite3.Row]:
         """Return events after an acknowledged event in chronological order."""
         with self._lock:

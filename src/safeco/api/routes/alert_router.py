@@ -1,68 +1,140 @@
 """Alert feed routes for the SafeCO API.
 
-SCAFFOLD: these routes read and mutate an in-memory ``app.state.alerts`` list.
-They are wiring for the dashboard alert view, not a completed feature. Alerts
-are not produced by the detector here and are not persisted, so state is lost on
-restart. Durable alert storage backed by the shared alert contract is deferred to
-a future milestone. Do not treat alert retrieval or acknowledgement as complete.
+These routes serve detector alerts from the persistent ``AlertStore`` and record
+engineer acknowledgement. Alerts are produced by the detector (for example when
+a scenario is run) and keyed by a deterministic id, so acknowledgement survives
+restarts and detector replay. The API only reads and acknowledges alerts; it
+never issues or blocks a control action, and acknowledgement is an engineer
+record, not an action SafeCO takes on the plant.
+
+Route ordering note: the fixed sub-paths ``/alerts/acknowledged`` and
+``/alerts/unacknowledged`` are declared before the ``/alerts/{alert_id}`` path
+parameter so those words are matched as literal routes rather than captured as an
+alert id.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from fastapi import APIRouter, HTTPException, Query
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from safeco.api.deps import AlertStoreDep
 
 router = APIRouter(tags=["alerts"])
 
 
 @router.get("/alerts")
-async def list_alerts(
-    request: Request,
+def list_alerts(
+    store: AlertStoreDep,
     limit: int = Query(default=50, ge=1, le=500),
     acknowledged: bool | None = None,
-) -> list[dict[str, Any]]:
-    """Return the current in-memory alert feed (scaffold, not persisted)."""
-    alerts: list[dict[str, Any]] = getattr(request.app.state, "alerts", [])
-    if acknowledged is not None:
-        alerts = [
-            alert for alert in alerts if alert.get("acknowledged") is acknowledged
-        ]
-    return sorted(alerts, key=lambda item: item.get("alert_id", ""))[:limit]
+) -> list[dict[str, object]]:
+    """Return persisted detector alerts for the dashboard queue.
+
+    Alerts are ordered most-urgent-first (by severity, then id) so the operator
+    sees the highest-severity findings at the top. The optional ``acknowledged``
+    filter lets a caller request one side of the queue without client-side
+    filtering.
+
+    Args:
+        store: The shared alert store, injected per request.
+        limit: Maximum number of alerts to return (1-500).
+        acknowledged: If ``True`` return only acknowledged alerts, if ``False``
+            only unacknowledged; if omitted (``None``) return both.
+
+    Returns:
+        A list of alert dicts in the shared alert-contract shape.
+
+    """
+    return store.list_alerts(acknowledged=acknowledged, limit=limit)
 
 
 @router.get("/alerts/unacknowledged")
-async def list_unacknowledged_alerts(
-    request: Request,
+def list_unacknowledged_alerts(
+    store: AlertStoreDep,
     limit: int = Query(default=50, ge=1, le=500),
-) -> list[dict[str, Any]]:
-    """Return the pending alert queue (scaffold, not persisted)."""
-    alerts: list[dict[str, Any]] = getattr(request.app.state, "alerts", [])
-    results = [alert for alert in alerts if alert.get("acknowledged") is False]
-    return sorted(results, key=lambda item: item.get("alert_id", ""))[:limit]
+) -> list[dict[str, object]]:
+    """Return the pending (unacknowledged) alert queue.
+
+    This is the operator's work list: findings that no engineer has confirmed
+    seeing yet. It is a convenience alias for ``/alerts?acknowledged=false``.
+
+    Args:
+        store: The shared alert store, injected per request.
+        limit: Maximum number of alerts to return (1-500).
+
+    Returns:
+        A list of unacknowledged alert dicts, most urgent first.
+
+    """
+    return store.list_alerts(acknowledged=False, limit=limit)
+
+
+@router.get("/alerts/acknowledged")
+def list_acknowledged_alerts(
+    store: AlertStoreDep,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[dict[str, object]]:
+    """Return the alerts an engineer has already acknowledged.
+
+    This is the history side of the queue, useful for reviewing what has been
+    handled without paging through the whole feed. It is a convenience alias for
+    ``/alerts?acknowledged=true``.
+
+    Args:
+        store: The shared alert store, injected per request.
+        limit: Maximum number of alerts to return (1-500).
+
+    Returns:
+        A list of acknowledged alert dicts, most urgent first.
+
+    """
+    return store.list_alerts(acknowledged=True, limit=limit)
 
 
 @router.get("/alerts/{alert_id}")
-async def get_alert(request: Request, alert_id: str) -> dict[str, Any]:
-    """Return a specific alert by id, or 404 if it is not in memory."""
-    alerts: list[dict[str, Any]] = getattr(request.app.state, "alerts", [])
-    for alert in alerts:
-        if alert.get("alert_id") == alert_id:
-            return alert
-    raise HTTPException(status_code=404, detail="alert not found")
+def get_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
+    """Return one alert by its deterministic id.
+
+    Backs the dashboard's "search by alert id" flow: an operator can copy an id
+    from the queue and look the finding up directly.
+
+    Args:
+        store: The shared alert store, injected per request.
+        alert_id: The deterministic UUID5 identifier of the alert.
+
+    Returns:
+        The alert dict in the shared alert-contract shape.
+
+    Raises:
+        HTTPException: 404 if no alert with that id is stored.
+
+    """
+    alert = store.get(alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="alert not found")
+    return alert
 
 
 @router.patch("/alerts/{alert_id}/ack")
-async def acknowledge_alert(request: Request, alert_id: str) -> dict[str, Any]:
-    """Acknowledge an alert in the in-memory state (scaffold, not persisted).
+def acknowledge_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
+    """Record an engineer's acknowledgement of an alert.
 
-    Validates that the alert exists (404 otherwise) and flips its acknowledged
-    flag on the in-memory record. The acknowledgement is not durably stored and
-    is lost on restart until persistent alert storage exists.
+    Validates that the alert exists and persists the acknowledgement so it
+    survives restarts and detector replay. This marks that a human has seen the
+    advisory finding; it never changes the plant.
+
+    Args:
+        store: The shared alert store, injected per request.
+        alert_id: The deterministic identifier of the alert to acknowledge.
+
+    Returns:
+        A small confirmation dict echoing the id and the acknowledged flag.
+
+    Raises:
+        HTTPException: 404 if no alert with that id is stored, so the API never
+            reports success for an alert that was never recorded.
+
     """
-    alerts: list[dict[str, Any]] = getattr(request.app.state, "alerts", [])
-    for alert in alerts:
-        if alert.get("alert_id") == alert_id:
-            alert["acknowledged"] = True
-            return {"alert_id": alert_id, "acknowledged": True}
-    raise HTTPException(status_code=404, detail="alert not found")
+    if not store.acknowledge(alert_id):
+        raise HTTPException(status_code=404, detail="alert not found")
+    return {"alert_id": alert_id, "acknowledged": True}

@@ -62,11 +62,20 @@ def list_events(
     scenario_id: str | None = None,
     store: StoreDep = None,
 ) -> list[dict[str, object]]:
-    """Return the most recent persisted events.
+    """Return the most recent persisted events, newest first.
 
-    The dashboard uses this feed to render the event stream and can optionally
-    filter by scenario. Each event is returned with the Event contract shape,
-    with value and process fields properly deserialized.
+    Backs the dashboard's event feed. Each row is rebuilt into the Event
+    contract shape (value and process deserialized from their stored JSON) so
+    the client receives objects, not raw JSON strings.
+
+    Args:
+        limit: Maximum number of events to return (1-500).
+        scenario_id: If given, restrict the feed to one scenario's events.
+        store: The shared event store, injected per request.
+
+    Returns:
+        A list of event dicts in Event-contract shape, newest first.
+
     """
     rows = store.list_events(limit=limit, scenario_id=scenario_id)
     events = [_row_to_event(row) for row in rows]
@@ -77,8 +86,16 @@ def list_events(
 def get_event(event_id: str, store: StoreDep = None) -> dict[str, object]:
     """Return a single event by its UUID-style identifier.
 
-    The returned event includes all Event contract fields with value and process
-    properly deserialized as objects.
+    Args:
+        event_id: The event's unique identifier.
+        store: The shared event store, injected per request.
+
+    Returns:
+        The event dict with all contract fields, value and process deserialized.
+
+    Raises:
+        HTTPException: 404 if no event with that id is stored.
+
     """
     row = store.get_event(event_id)
     if row is None:
@@ -93,10 +110,23 @@ def get_events_after(
     limit: int = Query(default=50, ge=1, le=500),
     store: StoreDep = None,
 ) -> list[dict[str, object]]:
-    """Return the persisted events that occurred after a known event id.
+    """Return the events recorded after a known event id, oldest first.
 
-    Events are returned in chronological order with full Event contract shape.
-    This is useful for dashboards to poll for new events since a checkpoint.
+    Lets a client poll for new events since a checkpoint it already holds,
+    instead of refetching the whole feed. Events come back in chronological
+    order in full Event-contract shape.
+
+    Args:
+        event_id: The checkpoint event; only later events are returned.
+        limit: Maximum number of events to return (1-500).
+        store: The shared event store, injected per request.
+
+    Returns:
+        A list of event dicts recorded after the checkpoint, oldest first.
+
+    Raises:
+        HTTPException: 404 if the checkpoint event id is unknown.
+
     """
     try:
         rows = store.events_after(event_id, limit=limit)

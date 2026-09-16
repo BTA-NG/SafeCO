@@ -7,10 +7,11 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from safeco.alert_store import AlertStore
 from safeco.storage import EventStore
 
 
-def _is_open(store: EventStore | None) -> bool:
+def _is_open(store: EventStore | AlertStore | None) -> bool:
     """Return True if the store has a live (non-closed) connection.
 
     A closed sqlite3 connection raises ``ProgrammingError`` on use; that is the
@@ -41,4 +42,21 @@ def get_store() -> EventStore:
     return store
 
 
+def get_alert_store() -> AlertStore:
+    """Return the shared persistent alert store for API request handlers.
+
+    Mirrors ``get_store``: reuses the injected store and reopens against the
+    configured alert-database path if none exists or it has been closed, so a
+    handler never receives a dead connection.
+    """
+    from safeco.app import alert_database_path, app
+
+    store = getattr(app.state, "alert_store", None)
+    if not _is_open(store):
+        store = AlertStore(alert_database_path())
+        app.state.alert_store = store
+    return store
+
+
 StoreDep = Annotated[EventStore, Depends(get_store)]
+AlertStoreDep = Annotated[AlertStore, Depends(get_alert_store)]

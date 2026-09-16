@@ -1,6 +1,11 @@
 # SafeCO API
 
-This directory contains the FastAPI service for the SafeCO dashboard and local operator workflow. The API is intentionally a read layer on top of the existing backend contracts in the `safeco` package. It reads persisted events from SQLite, exposes the latest plant snapshot, and serves the alert feed for the dashboard.
+This directory contains the FastAPI service and operator dashboard for SafeCO.
+SafeCO is a local-first advisory command monitor for industrial/utility control
+systems; Adupe Municipal Water Station is the example site used for the demo.
+The API is a read/advisory layer on top of the existing backend contracts in the
+`safeco` package: it reads persisted events, exposes the latest plant snapshot,
+serves detector alerts, and can run a scenario to generate that data.
 
 ## Purpose
 
@@ -15,46 +20,74 @@ The API is not the source of truth for plant behavior or detector logic. Those l
 
 The FastAPI layer provides a clean interface for the dashboard and local operator tooling.
 
-## Current milestone
+## Endpoints
 
-The current API milestone covers the core dashboard-facing routes. Routes are
-split below into **implemented** (backed by persisted data) and **scaffold**
-(wiring for the dashboard that is not yet backed by durable storage).
+All routes below are implemented and backed by persistent SQLite storage
+(`EventStore` for events, `AlertStore` for alerts).
 
-### Implemented (backed by the SQLite event store)
+### Events (event store)
 
 - `GET /api/health` — reports healthy vs degraded local collection feed
 - `GET /api/events` — recent persisted events, optional `scenario_id` filter
 - `GET /api/events/{event_id}` — single event, 404 if unknown
 - `GET /api/events/after/{event_id}` — events after a checkpoint, 404 if unknown
 - `GET /api/plant/state` — latest persisted process snapshot
-- `GET /api/scenarios` — scenario IDs derived from the actual
-  `NORMAL_SCENARIOS` and `ATTACK_SCENARIOS` registries
+
+### Alerts (alert store)
+
+- `GET /api/alerts` — persisted detector alerts, most urgent first, `acknowledged` filter
+- `GET /api/alerts/unacknowledged` — the pending alert queue
+- `GET /api/alerts/{alert_id}` — single alert, 404 if unknown
+- `PATCH /api/alerts/{alert_id}/ack` — record engineer acknowledgement (404 if unknown)
+
+Alerts are keyed by the detector's deterministic `alert_id`, so acknowledgement
+survives restarts and detector replay. Acknowledgement records that a human saw
+the advisory finding; it never changes the plant.
+
+### Scenarios (registry + execution)
+
+- `GET /api/scenarios` — scenario IDs from `NORMAL_SCENARIOS` + `ATTACK_SCENARIOS`
 - `GET /api/scenarios/{scenario_id}` — registration status, 404 if unknown
+- `POST /api/scenarios/{scenario_id}/run` — run a scenario (optional `seed`), persisting
+  its events and any detector alerts; returns a summary (events, alerts,
+  violations, reproducibility fingerprint), 404 if unknown
 
-### Scaffold (in-memory only, not persisted — do not treat as complete)
+Running a scenario drives the simulator so its consequences can be observed and
+explained. It never blocks a command or acts on a real plant.
 
-- `GET /api/alerts`
-- `GET /api/alerts/unacknowledged`
-- `GET /api/alerts/{alert_id}`
-- `PATCH /api/alerts/{alert_id}/ack`
+## Dashboard
 
-The alert routes read and mutate an in-memory `app.state.alerts` list. They are
-not populated by the detector and are not persisted, so alerts and their
-acknowledgement state are lost on restart. Durable alert storage backed by the
-shared alert contract is deferred to a future milestone. Alert retrieval and
-acknowledgement must not be presented as finished features.
+A local operator console is served at `/`, with assets under `/static` (vanilla
+HTML/CSS/JS — no build step). A fixed sidebar navigates five views over a live
+feed-status indicator and a persistent health banner. It polls `/api/health`,
+`/api/plant/state`, `/api/events`, and `/api/alerts` every 2 seconds and also
+refreshes immediately after any operator action.
 
-The scenario routes list and validate scenario IDs only. Scenario **execution**
-(`run_scenario`) is intentionally deferred and not exposed. No route performs or
-implies a confirmed simulator action; that remains future work.
+- **Plant state**: operating mode, power source, pump and valve status pills, and
+  a tank-level bar with the high-level-limit marker.
+- **Alerts**: the detector queue with an unacknowledged badge; all / unacknowledged
+  / acknowledged filters; search by alert ID; and per-alert severity, the alert ID
+  with a copy button, explanation, evidence, a confidence meter, and recommended
+  action, with a record-only acknowledge button.
+- **Events**: the recent event feed with a scenario filter and ground-truth labels.
+- **System health**: feed status, visibility, database availability, total events
+  collected, and the last event timestamp.
+
+The monitored-site name shown top-left is an editable display label persisted in
+the browser (`localStorage`); it defaults to the Adupe example site. The palette is
+flat (light content, a dark sidebar, status/severity colours — no gradients). If the
+local feed is lost the console keeps the last-known values and shows a
+degraded-visibility banner. It never implies SafeCO acted automatically;
+acknowledgement is an engineer record, not a plant action.
+
 
 ## Deferred work
 
-- Scenario **execution** endpoints (running a scenario through the API).
-- Persistent alert storage and acknowledgement backed by the alert contract.
-- Any engineer-confirmed simulator action. SafeCO stays advisory-only; the API
-  never issues or blocks control actions.
+- Any engineer-confirmed simulator action (write-back to the simulator after
+  acknowledgement). This is safety-sensitive and changes plant-facing behavior, so
+  it needs team agreement and Daniel's review of safety semantics before
+  implementation. SafeCO stays advisory-only: there is no autonomous, timed, or
+  unreviewed plant-changing command.
 
 ## Running the API
 
@@ -66,18 +99,18 @@ $env:PYTHONPATH = "src"
 python -m uvicorn safeco.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The default app object is exposed in `src/safeco/app.py`.
+Then open http://127.0.0.1:8000/ for the dashboard. The default app object is
+exposed in `src/safeco/app.py`.
 
 ## Local data source
 
-The service uses the shared SQLite event store created by `EventStore` in
-`src/safeco/storage.py`. The store shares a single connection across requests and
-serializes access with an internal lock so concurrent FastAPI requests are safe.
+The service uses the shared SQLite stores created by `EventStore` and `AlertStore`.
+Each shares a single connection across requests and serializes access with an
+internal lock so concurrent FastAPI requests are safe.
 
 ## Notes
 
 - The dashboard must treat SafeCO as advisory-only.
 - The API never issues or blocks control actions.
-- This layer exists to surface current state, raw event history, and alert
-  explanation for engineers.
-- Scenario discovery is available; scenario **execution** is deferred future work.
+- This layer surfaces current state, raw event history, and alert explanation for
+  engineers, and can run a scenario to generate that data.

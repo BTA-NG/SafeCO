@@ -5,9 +5,13 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from safeco.alert_store import AlertStore
 from safeco.api.routes.alert_router import router as alert_router
 from safeco.api.routes.event_router import router as event_router
 from safeco.api.routes.health_router import router as health_router
@@ -16,6 +20,8 @@ from safeco.api.routes.scenario_router import router as scenario_router
 from safeco.storage import EventStore
 
 DEFAULT_DATABASE = "data/safeco.db"
+DEFAULT_ALERT_DATABASE = "data/safeco_alerts.db"
+STATIC_DIR = Path(__file__).parent / "api" / "static"
 
 
 def database_path() -> str:
@@ -27,25 +33,38 @@ def database_path() -> str:
     return os.environ.get("SAFECO_DATABASE", DEFAULT_DATABASE)
 
 
+def alert_database_path() -> str:
+    """Return the alert-store path, overridable via ``SAFECO_ALERT_DATABASE``.
+
+    Production defaults to ``data/safeco_alerts.db`` — a separate file from the
+    event store so the two never hold competing writer connections.
+    """
+    return os.environ.get("SAFECO_ALERT_DATABASE", DEFAULT_ALERT_DATABASE)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Create and tear down shared resources deterministically.
 
     The lifespan only creates and closes what it owns. If a store has already
     been injected onto ``app.state`` (as tests do), it is left untouched so the
-    injector controls its lifecycle and the real database is never opened.
+    injector controls its lifecycle and the real databases are never opened.
     """
     owns_store = getattr(app.state, "store", None) is None
     if owns_store:
         app.state.store = EventStore(database_path())
-    if getattr(app.state, "alerts", None) is None:
-        app.state.alerts = []
+    owns_alert_store = getattr(app.state, "alert_store", None) is None
+    if owns_alert_store:
+        app.state.alert_store = AlertStore(alert_database_path())
     try:
         yield
     finally:
         if owns_store:
             app.state.store.close()
             app.state.store = None
+        if owns_alert_store:
+            app.state.alert_store.close()
+            app.state.alert_store = None
 
 
 app = FastAPI(
@@ -60,3 +79,13 @@ app.include_router(event_router, prefix="/api")
 app.include_router(alert_router, prefix="/api")
 app.include_router(plant_state_router, prefix="/api")
 app.include_router(scenario_router, prefix="/api")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    """Serve the operator dashboard page."""
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+# Dashboard assets (CSS/JS). Mounted after the API routes so /api/* wins.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

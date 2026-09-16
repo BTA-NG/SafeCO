@@ -28,13 +28,17 @@ def test_app_health_route_is_accessible(client) -> None:
 def test_lifespan_creates_and_closes_its_own_store(tmp_path, monkeypatch) -> None:
     """With no store injected, the lifespan opens one and closes it on exit.
 
-    Points the database at a temp path so production data/safeco.db is untouched,
-    and asserts the store is created inside the context and torn down after.
+    Points both databases at temp paths so the production files are untouched,
+    and asserts the stores are created inside the context and torn down after.
     """
     monkeypatch.setenv("SAFECO_DATABASE", str(tmp_path / "lifespan.db"))
+    monkeypatch.setenv("SAFECO_ALERT_DATABASE", str(tmp_path / "lifespan_alerts.db"))
     app.state.store = None
+    app.state.alert_store = None
     with TestClient(app) as test_client:
         assert app.state.store is not None
+        assert app.state.alert_store is not None
         assert test_client.get("/api/health").status_code == 200
-    # Lifespan owns the store here, so it must release it on shutdown.
+    # Lifespan owns the stores here, so it must release them on shutdown.
     assert app.state.store is None
+    assert app.state.alert_store is None
