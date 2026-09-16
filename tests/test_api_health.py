@@ -41,6 +41,38 @@ def test_health_endpoint_reports_degraded_visibility_when_no_events_exist(
     assert payload["degraded_visibility"] is True
 
 
+def test_health_endpoint_reports_degraded_visibility_when_feed_is_stale(
+    client,
+    event_store,
+) -> None:
+    """A live-but-silent feed is degraded even though history is present.
+
+    An empty database is not the only way visibility degrades. Once the newest
+    event ages past the freshness window the operator has lost their live view
+    of the plant, so the flag must trip here too — not only when no event has
+    ever been recorded.
+    """
+    event_store.append(
+        Event(
+            scenario_id="normal_running_01",
+            ground_truth="normal",
+            source="scheduler",
+            command="telemetry",
+            target="tank",
+            value=55.2,
+            mode="running",
+            process=ProcessSnapshot(55.2, "open", "on"),
+            sequence_id=1,
+            timestamp="2000-01-01T00:00:00+00:00",
+        )
+    )
+
+    payload = client.get("/api/health").json()
+    assert payload["degraded_visibility"] is True
+    assert payload["status"] == "degraded"
+    assert payload["event_count"] == 1
+
+
 def test_health_endpoint_reports_latest_event_timestamp(client, event_store) -> None:
     """The health endpoint should include the newest persisted event time."""
     event = Event(

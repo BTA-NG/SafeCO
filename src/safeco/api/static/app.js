@@ -580,10 +580,10 @@ async function refresh() {
     state.lastUpdated = Date.now();
 
     if (health.degraded_visibility) {
-      setBanner(
-        "degraded",
-        "Degraded visibility — no events recorded yet. Run a scenario or start the feed."
-      );
+      const detail = health.event_count
+        ? "no fresh events — the local feed may be down. Showing last-known values."
+        : "no events recorded yet. Run a scenario or start the feed.";
+      setBanner("degraded", `Degraded visibility — ${detail}`);
       setLive("degraded", "feed degraded");
     } else {
       setBanner("ok", `Local feed healthy. Last event ${health.last_event_timestamp}.`);
