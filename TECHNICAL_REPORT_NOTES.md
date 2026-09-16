@@ -37,9 +37,9 @@ state; it is distinct from autonomous response and is not a real-plant control p
 - Ruff format check passes.
 - Maintenance, extended-normal, scenario fingerprint, and CLI tests passed in the
   Phase 2 scenario PR review (27 relevant tests).
-- Two live Modbus TCP tests cannot bind localhost in this restricted execution
-  environment. Re-run those tests on a normal developer laptop/CI and record the
-  result here.
+- Live Modbus TCP tests (`tests/test_modbus_server.py`, all 6) pass on a normal
+  developer machine (16 September 2026, Phase 5 close-out gate): the earlier
+  localhost-bind restriction no longer applies here.
 
 ## Implemented scope
 
