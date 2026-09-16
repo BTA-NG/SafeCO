@@ -192,11 +192,11 @@ their base attack, only the when changes.
 ## Evaluation handoff (simulator → detector)
 
 Scenario planner exposes **observed** snapshots — post-noise/perturbation — via
-`safeco.scenarios.observed_state_snapshots(scenario_id, seed)`. The shared
-`Event.process` (built in `collector.py`) is currently the denoised true state.
-To exercise noise/anomaly plans through the baseline detector, map the observed
-snapshots onto `Event.process` inside `events_for_scenario`; keep the true-state
-values reachable via `run_scenario(..., anomaly_plan=[]).snapshots`.
+`safeco.scenarios.observed_state_snapshots(scenario_id, seed)`. Since the
+hardening evaluation work, `events_for_scenario` merges the step's observed
+snapshot into `Event.process` (`_process_at`), so noise/anomaly plans run
+through the baseline detector. Keep the true-state values reachable via
+`run_scenario(..., anomaly_plan=[]).snapshots`.
 
 ## Coding Standards
 
@@ -251,5 +251,5 @@ These files define the system's shared interface. Changes require Daniel's revie
 | 2 | Normal plant & data (maintenance, extended normal, CLI, fingerprints) | ✅ Done |
 | 3 | Attacks (injection, replay, mistimed valid, slow drift) | ✅ Done |
 | 4 | Detector support (process realism validation) | ✅ Done |
-| 5 | Hardening (attack timing variation, telemetry noise) | ⬜ 8–14 Sep (in progress) |
+| 5 | Hardening (attack timing variation, telemetry noise) | ✅ Done (16 Sep, PR #16 + close-out) |
 | 6 | Submission (4-page report, architecture figures, demo) | ⬜ 15–20 Sep |
