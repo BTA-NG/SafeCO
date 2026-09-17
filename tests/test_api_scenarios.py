@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
+from safeco.scenarios import (
+    ATTACK_JITTER_SCENARIOS,
+    ATTACK_SCENARIOS,
+    NORMAL_SCENARIOS,
+)
 
 
 def test_scenario_list_includes_all_scenarios(client) -> None:
@@ -53,6 +57,24 @@ def test_scenario_detail_validates_attack_scenarios(client) -> None:
     """Attack scenario IDs should also be valid and return registered."""
     # Pick the first scenario from ATTACK_SCENARIOS
     scenario_id = list(ATTACK_SCENARIOS.keys())[0]
+
+    response = client.get(f"/api/scenarios/{scenario_id}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scenario_id"] == scenario_id
+    assert payload["status"] == "registered"
+
+
+def test_scenario_detail_validates_jitter_variants(client) -> None:
+    """Jitter variants are runnable, so the detail route must validate them.
+
+    ``POST /scenarios/{id}/run`` drives the canonical runner, which accepts the
+    timing-jitter variants. The detail route validates an id before a run, so it
+    must accept exactly what the runner accepts; otherwise the API 404s an id it
+    would happily run. (The curated ``GET /scenarios`` list is a separate,
+    deliberately narrower question and still omits these variants.)
+    """
+    scenario_id = list(ATTACK_JITTER_SCENARIOS.keys())[0]
 
     response = client.get(f"/api/scenarios/{scenario_id}")
     assert response.status_code == 200

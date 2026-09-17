@@ -308,6 +308,28 @@ ATTACK_SCENARIOS: dict[str, Callable[[], list[Step]]] = {}
 """Deterministic attack scenario registry kept separate from benign data."""
 
 
+def runnable_scenarios() -> dict[str, Callable[[], list[Step]]]:
+    """Return every scenario id the runner can execute.
+
+    This is the single source of truth for "what can be run": the benign and
+    attack registries plus the timing-jitter variants. ``run_scenario``, the CLI
+    ``main``, and the API's scenario-detail validation all resolve ids against
+    this set so a run and the validation that precedes it can never disagree.
+
+    It is deliberately *wider* than the curated ``GET /scenarios`` picker list
+    (normal + attack only): the jitter variants stay out of the picker and the
+    evaluation exact-set until they are opted in, but they remain directly
+    runnable by id, so the id validator must recognise them.
+
+    Returns:
+        A merged ``{id: step-factory}`` dict spanning the normal, attack, and
+        jitter registries. A fresh dict each call, so callers may not mutate the
+        underlying registries through it.
+
+    """
+    return {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
+
+
 def run_scenario(
     name: str,
     seed: int = 42,
@@ -334,7 +356,7 @@ def run_scenario(
         KeyError: If ``name`` is not found in the registry.
 
     """
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
+    scenarios = runnable_scenarios()
     if name not in scenarios:
         raise KeyError(f"unknown scenario {name!r}; known: {sorted(scenarios)}")
     plans = {**ANOMALY_PLANS, **ATTACK_JITTER_PLANS}
@@ -793,7 +815,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--fingerprint", action="store_true")
     args = parser.parse_args(argv)
-    scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS, **ATTACK_JITTER_SCENARIOS}
+    scenarios = runnable_scenarios()
     if args.name not in scenarios:
         print(
             f"error: unknown scenario {args.name!r}; known: {sorted(scenarios)}",
