@@ -388,7 +388,6 @@ main {
   display: flex;
   align-items: stretch;
   gap: 24px;
-  padding-right: 36px;
 }
 
 .tank-markers {
@@ -426,20 +425,6 @@ main {
   position: relative;
   display: flex;
   flex-direction: column;
-}
-
-.tank-scale {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: absolute;
-  right: -32px;
-  top: 0;
-  bottom: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink);
-  padding: 2px 0;
 }
 
 .tank-svg {
