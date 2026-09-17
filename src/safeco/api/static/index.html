@@ -92,10 +92,6 @@
                           <stop offset="0%" stop-color="#b8ddf5"/>
                           <stop offset="100%" stop-color="#5a9ad4"/>
                         </linearGradient>
-                        <linearGradient id="shimmer" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
-                          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-                        </linearGradient>
                       </defs>
                       <rect x="1" y="1" width="178" height="318" rx="17" ry="17"
                             fill="#e8eef5" stroke="#9aa8b8" stroke-width="2"/>
@@ -103,19 +99,16 @@
                         <!-- Water body -->
                         <rect data-field="tank_water" x="0" y="320" width="180" height="320"
                               fill="url(#waterGrad)" opacity="0.92"/>
-                        <!-- Wave layers: wider than tank, animated via CSS translateX -->
+                        <!-- Wave layers: sit exactly at the water surface.
+                             y=0 IS the water line; waves extend downward only. -->
                         <g data-field="tank_wave_back" transform="translate(-60,320)">
-                          <path d="M0,0 Q30,-10 60,0 Q90,10 120,0 Q150,-10 180,0 Q210,10 240,0 Q270,-10 300,0 L300,16 L0,16 Z" fill="#8fbde0" opacity="0.5"/>
+                          <path d="M0,0 Q30,3 60,0 Q90,-3 120,0 Q150,3 180,0 Q210,-3 240,0 Q270,3 300,0 L300,8 L0,8 Z" fill="#8fbde0" opacity="0.45"/>
                         </g>
                         <g data-field="tank_wave_mid" transform="translate(-40,320)">
-                          <path d="M0,0 Q25,-7 50,0 Q75,7 100,0 Q125,-7 150,0 Q175,7 200,0 Q225,-7 250,0 Q275,7 300,0 L300,14 L0,14 Z" fill="#7aabda" opacity="0.65"/>
+                          <path d="M0,0 Q25,2.5 50,0 Q75,-2.5 100,0 Q125,2.5 150,0 Q175,-2.5 200,0 Q225,2.5 250,0 Q275,-2.5 300,0 L300,6 L0,6 Z" fill="#7aabda" opacity="0.6"/>
                         </g>
                         <g data-field="tank_wave_front" transform="translate(-20,320)">
-                          <path d="M0,0 Q20,-5 40,0 Q60,5 80,0 Q100,-5 120,0 Q140,5 160,0 Q180,-5 200,0 Q220,5 240,0 Q260,-5 280,0 Q300,5 320,0 L320,12 L0,12 Z" fill="#6898cc" opacity="0.85"/>
-                        </g>
-                        <!-- Surface shimmer -->
-                        <g data-field="tank_shimmer" transform="translate(0,320)">
-                          <rect x="0" y="-3" width="180" height="8" fill="url(#shimmer)" opacity="0.8" rx="2"/>
+                          <path d="M0,0 Q20,2 40,0 Q60,-2 80,0 Q100,2 120,0 Q140,-2 160,0 Q180,2 200,0 Q220,-2 240,0 Q260,2 280,0 Q300,-2 320,0 L320,5 L0,5 Z" fill="#6898cc" opacity="0.8"/>
                         </g>
                       </g>
                       <!-- Scale labels inside SVG so they never overlap the status card -->

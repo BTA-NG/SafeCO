@@ -223,7 +223,6 @@ function renderPlant(payload) {
   const waveBack = body.querySelector('[data-field="tank_wave_back"]');
   const waveMid = body.querySelector('[data-field="tank_wave_mid"]');
   const waveFront = body.querySelector('[data-field="tank_wave_front"]');
-  const shimmer = body.querySelector('[data-field="tank_shimmer"]');
   const pctText = body.querySelector('[data-field="tank_pct"]');
 
   if (waterRect && pctText) {
@@ -236,7 +235,6 @@ function renderPlant(payload) {
     if (waveBack) waveBack.setAttribute("y", waterTop);
     if (waveMid) waveMid.setAttribute("y", waterTop);
     if (waveFront) waveFront.setAttribute("y", waterTop);
-    if (shimmer) shimmer.setAttribute("y", waterTop);
     pctText.textContent = `${level.toFixed(1)}%`;
     // Position pct text: above water if enough room, otherwise centered
     const textY = level > 12 ? waterTop - 18 : 160;

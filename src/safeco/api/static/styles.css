@@ -509,11 +509,6 @@ main {
   from { transform: translateX(-20px); }
   to   { transform: translateX(-140px); }
 }
-@keyframes shimmer-drift {
-  0%   { opacity: 0.7; }
-  50%  { opacity: 0.3; }
-  100% { opacity: 0.7; }
-}
 
 .tank-svg.animate [data-field="tank_wave_back"] {
   animation: wave-flow-slow 6s linear infinite;
@@ -523,9 +518,6 @@ main {
 }
 .tank-svg.animate [data-field="tank_wave_front"] {
   animation: wave-flow-fast 3.2s linear infinite;
-}
-.tank-svg.animate [data-field="tank_shimmer"] {
-  animation: shimmer-drift 3s ease-in-out infinite;
 }
 
 /* Toolbar / filters / search */
