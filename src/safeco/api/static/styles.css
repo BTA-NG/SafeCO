@@ -418,6 +418,22 @@ main {
 .tank-visual {
   flex-shrink: 0;
   width: 180px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.tank-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: absolute;
+  right: -32px;
+  top: 0;
+  bottom: 0;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 0;
 }
 
 .tank-svg {
@@ -485,21 +501,6 @@ main {
 .tank-status-key {
   color: var(--muted);
   font-size: 13px;
-}
-
-.tank-status-note {
-  color: var(--crit);
-  font-size: 12px;
-  font-style: italic;
-}
-
-.tank-scale {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 8px;
-  max-width: 180px;
 }
 
 /* Water wave animation — continuous horizontal flow via translateX.
