@@ -639,6 +639,11 @@ function eventsUrl() {
 /* ---------- Poll loop ---------- */
 
 async function refresh() {
+  const btn = document.getElementById("refresh-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+  }
   try {
     const [health, plant, events, alerts] = await Promise.all([
       getJSON(API.health),
@@ -673,6 +678,11 @@ async function refresh() {
       renderAlerts(state.lastGood.alerts);
       updateAlertBadge(state.lastGood.alerts);
       renderHealth(state.lastGood.health);
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Refresh";
     }
   }
 }
