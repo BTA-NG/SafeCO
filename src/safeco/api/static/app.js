@@ -280,6 +280,7 @@ function renderPlant(payload) {
   }
 
   // Side markers — only real plant thresholds, no fabricated values.
+  // Positioned at their actual percentage height (bottom: {pct}%).
   const markers = body.querySelector('[data-field="tank_markers"]');
   if (markers) {
     const markerDefs = [];
@@ -293,7 +294,7 @@ function renderPlant(payload) {
     markers.innerHTML = markerDefs
       .map(
         (m) =>
-          `<div class="tank-marker"><span>${m.label} ${m.pct.toFixed(0)}%</span><span class="tank-marker-line" style="background:${m.color}"></span></div>`
+          `<div class="tank-marker" style="bottom: ${m.pct}%"><span>${m.label} ${m.pct.toFixed(0)}%</span><span class="tank-marker-line" style="background:${m.color}"></span></div>`
       )
       .join("");
   }

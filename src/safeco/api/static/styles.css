@@ -388,25 +388,30 @@ main {
   display: flex;
   align-items: stretch;
   gap: 24px;
+  padding-right: 36px;
 }
 
 .tank-markers {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 18px 0;
   font-size: 11px;
   color: var(--muted);
   text-align: right;
   min-width: 64px;
+  position: relative;
+  height: 320px;
 }
 
 .tank-marker {
+  position: absolute;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 4px;
   justify-content: flex-end;
   white-space: nowrap;
+  /* bottom is set via inline style: bottom: {pct}% */
 }
 
 .tank-marker-line {
@@ -432,7 +437,8 @@ main {
   top: 0;
   bottom: 0;
   font-size: 11px;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--ink);
   padding: 2px 0;
 }
 
