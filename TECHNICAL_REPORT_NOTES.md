@@ -28,9 +28,10 @@ state; it is distinct from autonomous response and is not a real-plant control p
 
 ## Current evidence (17 September 2026)
 
-- `origin/main` is at `1a296d7`, merging dashboard PR #17 after the timing/noise
-  hardening PR #16. The merged tree includes the simulator, scenarios, detector,
-  evaluation, persistent API stores, scenario runner, and operator dashboard.
+- `origin/main` is at `3fec424`, merging Phase 5 close-out PR #18 after dashboard
+  PR #17 (`1a296d7`) and timing/noise hardening PR #16. The merged tree includes
+  the simulator, scenarios, detector, evaluation, persistent API stores, scenario
+  runner, operator dashboard, and benign-noise regression coverage.
 - The merged dashboard branch passed Ruff, formatting, `git diff --check`, and
   269 tests on the demo laptop before merge.
 - The final post-merge dashboard-clarity/baseline-integration changes passed all
@@ -60,10 +61,10 @@ state; it is distinct from autonomous response and is not a real-plant control p
   Phase 2 scenario PR review (27 relevant tests).
 - Joseph's detector/evaluation review passed Ruff and formatting checks and 84
   focused tests; the full detector branch reported 133 tests before merge.
-- Local Modbus TCP tests require an environment that permits localhost socket binding;
-  they passed in the developer worktree used to verify PR #15/#16. The restricted
-  agent sandbox may reject those sockets, so sandbox failures must not be reported as
-  product failures.
+- Live Modbus TCP tests (`tests/test_modbus_server.py`, all 6) pass on a normal
+  developer machine (16 September 2026, Phase 5 close-out gate): the earlier
+  localhost-bind restriction no longer applies here. Restricted environments may
+  still reject localhost sockets; distinguish that restriction from product failures.
 - `source="scheduler"` identifies the deterministic simulator command channel;
   `ground_truth` is synthetic evaluation metadata. Detection does not branch on
   either field.
@@ -194,10 +195,11 @@ separate.
   from simulated elapsed time instead of wall clock, removing the nondeterministic
   `STALE_TIMESTAMP` false positive. See commit `56c692f` and flag for Joseph/Daniel
   review of `src/safeco/evaluation.py`.
-- `events_for_scenario` now composes canonical `run_scenario`, maps observed analog
-  telemetry into evaluated event features, and retains command-time discrete state.
-  Registered anomalies therefore reach evaluation without manufacturing transition
-  false positives.
+- Phase 5 close-out (16 September 2026): `events_for_scenario` composes canonical
+  `run_scenario` and maps each step's observed analog telemetry into `Event.process`
+  via `_process_at`, retaining command-time discrete state. Registered anomalies
+  therefore reach baseline evaluation without manufacturing transition false
+  positives (`30a85c4`/`ab3c2e7`). Follow-up resolved.
 
 ## Hardening: attack timing variation + telemetry noise (8 September 2026)
 
@@ -216,12 +218,22 @@ separate.
 - Generator version bumped to `safeco-scenarios/1.3`.
 - `ScenarioResult.step_durations` records perturbed durations, so evaluation event
   timestamps and detection latency reflect the actual jittered simulated timeline.
+- Phase 5 close-out (16 September 2026): observed → `Event.process` mapping
+  confirmed and jitter variants counted in `ATTACK_EVALUATION_SCENARIOS`. A
+  Layer 5 retrain on the noisy envelope proved unnecessary — the clean-trained
+  robust ranges absorb the 3σ-clamped noise in the tested scenario
+  (`test_evaluation_report_computes_recall_and_precision` passes at
+  precision/recall 1.0; `test_benign_noise_01_has_no_baseline_false_positive`
+  locks in the noisy true negative). Follow-up resolved.
 - Reproducible fingerprints (seed 42):
-  - `benign_noise_01` (normal): `6ff5662b1a1cdb43b73d30310bf4381c381d249645467e719a4be35da85eca2f`
-  - `attack_injection_jitter_01` (injection): `11f5cfdd81281a156c30609dc9d4742da16568d72681b20c966acaee35333d44`
-  - `attack_replay_jitter_01` (replay): `1d7322c7e1a8c33627b070ad5f5b8310af687496049bf2bb359b4e4730b44cda`
-  - `attack_mistimed_jitter_01` (mistimed): `44f11c548bffeb24fe7e00e087f1b3b155f321bae513d106d7125eaa6b5a2330`
-  - `attack_drift_jitter_01` (drift): `8df39f0de234ec4238644fac0a4626b03e970015c489d25082f38cbbf49c7771`
+  - `benign_noise_01` (normal): `9684fc7042c0eca1737e9bd9260629f5e07c99878380bcb077cf2541d354566f`
+  - `attack_injection_jitter_01` (injection): `8ed9586b5fa8bd55cee27105d41ee40120d4333ffe89feb25b3c7c5182110531`
+  - `attack_replay_jitter_01` (replay): `7cb8c6517bba85fa115d1bccff4c746b3352cdc0f9d888c9880aa8901d3c8ffc`
+  - `attack_mistimed_jitter_01` (mistimed): `0b5ba9d8fddb1ed8d6ade8ccd2efadb6578bdea6311b81b2ba2ba83e6c96a308`
+  - `attack_drift_jitter_01` (drift): `e02e9beb08777fe1ccaa247cf5fad610ec811199ceac8e5fcc0e36fb35934d3a`
+- Fingerprints re-recorded 16 September 2026 during Phase 5 close-out: the
+  payload gained `step_durations` after the 8 September recording
+  (`30a85c4`), so the values changed by design; scenario bodies are untouched.
 - Realism evidence reproduces via `check_process_realism("benign_noise_01")`
   including the `bounded_noise` check.
 

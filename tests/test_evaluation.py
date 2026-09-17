@@ -103,6 +103,13 @@ def test_evaluation_report_computes_recall_and_precision():
     assert report.classification.true_negative == len(NORMAL_SCENARIOS)
 
 
+def test_benign_noise_01_has_no_baseline_false_positive():
+    profile = train_baseline_for_evaluation()
+    result = evaluate_scenario("benign_noise_01", baseline_profile=profile)
+    assert result.classification == "TN"
+    assert result.actionable_alert_count == 0
+
+
 def test_maintenance_false_positives_are_counted_separately():
     report = evaluate_scenarios(("maintenance_01",))
     assert report.maintenance_false_positives == 0
