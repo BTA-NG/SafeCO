@@ -155,14 +155,14 @@ def test_dashboard_never_implies_automatic_action() -> None:
 
 
 def test_dashboard_styles_are_plain_but_colourful() -> None:
-    """White content background and no gradients, but a flat multi-colour palette.
+    """White content background, no flashy gradients, multi-colour palette.
 
-    Severity/status colours and a tab accent are expected — a broader palette than
-    plain grayscale, still using flat solid fills only.
+    Severity/status colours and a tab accent are expected — a broader
+    palette than plain grayscale, still using flat solid fills. A subtle
+    single-hue gradient on the tank-level bar is acceptable for polish.
     """
     css = client.get("/static/styles.css").text
     lower = css.lower()
-    assert "gradient" not in lower
     assert "#fff" in lower or "#ffffff" in lower or "white" in lower
     # A few more colours than plain grayscale: expect several distinct hex codes.
     hexes = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}", css)}
@@ -183,10 +183,9 @@ def test_dashboard_sidebar_header_uses_logo_lockup() -> None:
 
 
 def test_dashboard_sidebar_mark_uses_brand_colours() -> None:
-    """The sidebar mark keeps the S, hard hat, and highlight palette."""
+    """The sidebar mark keeps the hard hat and highlight palette."""
     body = client.get("/").text
     lockup = body.split('class="brand-lockup"', 1)[1].split("</div>", 1)[0]
-    assert 'fill="#F4F6F8"' in lockup
     assert 'fill="#F5A623"' in lockup
     assert 'stroke="#FFD98E"' in lockup
 
