@@ -221,18 +221,79 @@ function renderPlant(payload) {
     p.tank_level
   );
   const level = Math.max(0, Math.min(100, Number(p.tank_level) || 0));
-  const fill = body.querySelector('[data-field="tank_level_bar"]');
-  fill.style.width = `${level}%`;
+  const svg = body.querySelector(".tank-svg");
+  const waterRect = body.querySelector('[data-field="tank_water"]');
+  const waveBack = body.querySelector('[data-field="tank_wave_back"]');
+  const waveFront = body.querySelector('[data-field="tank_wave_front"]');
+  const pctText = body.querySelector('[data-field="tank_pct"]');
+
+  // Water fill: top of water = 320 - (level/100 * 320)
+  const waterTop = 320 - (level / 100) * 320;
+  const waterH = 320 - waterTop;
+  waterRect.setAttribute("y", waterTop);
+  waterRect.setAttribute("height", waterH);
+  const wb = waterTop + 4;
+  const wf = waterTop + 2;
+  waveBack.setAttribute(
+    "d",
+    `M0,${wb} Q45,${wb - 4} 90,${wb} Q135,${wb + 4} 180,${wb} L180,320 L0,320 Z`
+  );
+  waveFront.setAttribute(
+    "d",
+    `M0,${wf} Q45,${wf - 2} 90,${wf} Q135,${wf + 2} 180,${wf} L180,320 L0,320 Z`
+  );
+  pctText.textContent = `${level.toFixed(1)}%`;
+  // Position pct text: centered above water or centered in tank if low
+  const textY = level > 12 ? waterTop - 18 : 160;
+  pctText.setAttribute("y", Math.max(30, textY));
+
+  // Animate waves when feed is live
+  const isLive = document.getElementById("live-dot").classList.contains("ok");
+  svg.classList.toggle("animate", isLive);
+
+  // Status card
   const limit = p.high_level_limit;
+  const target = p.target_level;
   const over = limit !== null && limit !== undefined && level >= Number(limit);
-  fill.className = `level-fill${over ? " high" : ""}`;
-  const mark = body.querySelector('[data-field="high_level_limit_mark"]');
-  if (limit === null || limit === undefined) {
-    mark.hidden = true;
+  const nearTarget =
+    target !== null && target !== undefined && Math.abs(level - Number(target)) < 3;
+  const statusDot = body.querySelector('[data-field="tank_status_dot"]');
+  const statusText = body.querySelector('[data-field="tank_status"]');
+  const targetDisp = body.querySelector('[data-field="tank_target_display"]');
+  const updatedDisp = body.querySelector('[data-field="tank_updated"]');
+  if (over) {
+    statusDot.className = "tank-status-dot crit";
+    statusText.textContent = "Critical";
+  } else if (nearTarget) {
+    statusDot.className = "tank-status-dot warn";
+    statusText.textContent = "Warning";
   } else {
-    mark.hidden = false;
-    mark.style.left = `${Math.max(0, Math.min(100, Number(limit)))}%`;
+    statusDot.className = "tank-status-dot ok";
+    statusText.textContent = "Normal";
   }
+  targetDisp.textContent = target !== null && target !== undefined
+    ? fmtPercent(target)
+    : "—";
+  const ts = payload.timestamp || "";
+  updatedDisp.textContent = ts ? ts.split("T")[1]?.split("+")[0] || ts : "—";
+
+  // Side markers
+  const markers = body.querySelector('[data-field="tank_markers"]');
+  const markerDefs = [];
+  if (target !== null && target !== undefined) {
+    markerDefs.push({ label: "Target", pct: Number(target), color: "var(--accent)" });
+  }
+  if (limit !== null && limit !== undefined) {
+    markerDefs.push({ label: "Warning", pct: Number(limit) * 0.85, color: "var(--warn)" });
+    markerDefs.push({ label: "Critical", pct: Number(limit), color: "var(--crit)" });
+  }
+  markerDefs.sort((a, b) => a.pct - b.pct);
+  markers.innerHTML = markerDefs
+    .map(
+      (m) =>
+        `<div class="tank-marker"><span>${m.label} ${m.pct.toFixed(0)}%</span><span class="tank-marker-line" style="background:${m.color}"></span></div>`
+    )
+    .join("");
 }
 
 /* ---------- Events ---------- */

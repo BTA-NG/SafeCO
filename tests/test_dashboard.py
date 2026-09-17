@@ -111,10 +111,12 @@ def test_dashboard_events_use_a_scenario_selector() -> None:
 
 
 def test_dashboard_labels_the_high_level_limit() -> None:
-    """The plant view explains the red safety-limit marker."""
+    """The plant view explains the high-level safety limit and tank visualisation."""
     body = client.get("/").text
     assert 'data-field="high_level_limit"' in body
-    assert "Red marker: high-level limit" in body
+    assert 'class="tank-visual"' in body
+    assert 'data-field="tank_water"' in body
+    assert 'data-field="tank_status"' in body
 
 
 def test_dashboard_script_supports_tab_switching() -> None:
