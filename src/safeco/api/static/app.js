@@ -250,12 +250,12 @@ function renderPlant(payload) {
     svg.classList.toggle("animate", shouldAnimate);
   }
 
-  // Status card
+  // Status card — matches the plant detector: only two states exist.
+  // Critical: level >= high_level_limit  (real detector rule)
+  // Normal:   level < high_level_limit
   const limit = p.high_level_limit;
   const target = p.target_level;
   const over = limit !== null && limit !== undefined && level >= Number(limit);
-  const nearTarget =
-    target !== null && target !== undefined && Math.abs(level - Number(target)) < 3;
   const statusDot = body.querySelector('[data-field="tank_status_dot"]');
   const statusText = body.querySelector('[data-field="tank_status"]');
   const targetDisp = body.querySelector('[data-field="tank_target_display"]');
@@ -264,9 +264,6 @@ function renderPlant(payload) {
     if (over) {
       statusDot.className = "tank-status-dot crit";
       statusText.textContent = "Critical";
-    } else if (nearTarget) {
-      statusDot.className = "tank-status-dot warn";
-      statusText.textContent = "Warning";
     } else {
       statusDot.className = "tank-status-dot ok";
       statusText.textContent = "Normal";
@@ -282,7 +279,7 @@ function renderPlant(payload) {
     updatedDisp.textContent = ts ? ts.split("T")[1]?.split("+")[0] || ts : "—";
   }
 
-  // Side markers
+  // Side markers — only real plant thresholds, no fabricated values.
   const markers = body.querySelector('[data-field="tank_markers"]');
   if (markers) {
     const markerDefs = [];
@@ -290,8 +287,7 @@ function renderPlant(payload) {
       markerDefs.push({ label: "Target", pct: Number(target), color: "var(--accent)" });
     }
     if (limit !== null && limit !== undefined) {
-      markerDefs.push({ label: "Warning", pct: Number(limit) * 0.85, color: "var(--warn)" });
-      markerDefs.push({ label: "Critical", pct: Number(limit), color: "var(--crit)" });
+      markerDefs.push({ label: "Limit", pct: Number(limit), color: "var(--crit)" });
     }
     markerDefs.sort((a, b) => a.pct - b.pct);
     markers.innerHTML = markerDefs
