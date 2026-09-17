@@ -78,6 +78,17 @@ body {
   padding: 6px 10px 18px;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-lockup > svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .product {
   font-size: 22px;
   font-weight: 700;
