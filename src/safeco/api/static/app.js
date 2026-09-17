@@ -221,27 +221,24 @@ function renderPlant(payload) {
   const svg = body.querySelector(".tank-svg");
   const waterRect = body.querySelector('[data-field="tank_water"]');
   const waveBack = body.querySelector('[data-field="tank_wave_back"]');
+  const waveMid = body.querySelector('[data-field="tank_wave_mid"]');
   const waveFront = body.querySelector('[data-field="tank_wave_front"]');
+  const shimmer = body.querySelector('[data-field="tank_shimmer"]');
   const pctText = body.querySelector('[data-field="tank_pct"]');
 
-  if (waterRect && waveBack && waveFront && pctText) {
+  if (waterRect && pctText) {
     // Water fill: top of water = 320 - (level/100 * 320)
     const waterTop = 320 - (level / 100) * 320;
     const waterH = 320 - waterTop;
     waterRect.setAttribute("y", waterTop);
     waterRect.setAttribute("height", waterH);
-    const wb = waterTop + 4;
-    const wf = waterTop + 2;
-    waveBack.setAttribute(
-      "d",
-      `M0,${wb} Q45,${wb - 4} 90,${wb} Q135,${wb + 4} 180,${wb} L180,320 L0,320 Z`
-    );
-    waveFront.setAttribute(
-      "d",
-      `M0,${wf} Q45,${wf - 2} 90,${wf} Q135,${wf + 2} 180,${wf} L180,320 L0,320 Z`
-    );
+    // Position wave groups at the water surface (y-attr, not transform)
+    if (waveBack) waveBack.setAttribute("y", waterTop);
+    if (waveMid) waveMid.setAttribute("y", waterTop);
+    if (waveFront) waveFront.setAttribute("y", waterTop);
+    if (shimmer) shimmer.setAttribute("y", waterTop);
     pctText.textContent = `${level.toFixed(1)}%`;
-    // Position pct text: centered above water or centered in tank if low
+    // Position pct text: above water if enough room, otherwise centered
     const textY = level > 12 ? waterTop - 18 : 160;
     pctText.setAttribute("y", Math.max(30, textY));
   }
@@ -249,7 +246,8 @@ function renderPlant(payload) {
   // Animate waves when feed is live
   const liveDot = document.getElementById("live-dot");
   if (svg && liveDot) {
-    svg.classList.toggle("animate", liveDot.classList.contains("ok"));
+    const shouldAnimate = liveDot.classList.contains("ok");
+    svg.classList.toggle("animate", shouldAnimate);
   }
 
   // Status card
