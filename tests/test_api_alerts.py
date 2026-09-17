@@ -27,7 +27,7 @@ def test_alerts_endpoint_returns_persisted_alerts(client, alert_store) -> None:
 
 
 def test_unacknowledged_alerts_filter(client, alert_store) -> None:
-    """The unacknowledged route should filter the persisted alerts."""
+    """?acknowledged=false should return only the pending alerts."""
     a = _unsafe_pump_alert("event-1")
     b = build_alert(
         "event-2",
@@ -38,13 +38,13 @@ def test_unacknowledged_alerts_filter(client, alert_store) -> None:
     alert_store.upsert(b)
     alert_store.acknowledge(a.alert_id)
 
-    response = client.get("/api/alerts/unacknowledged")
+    response = client.get("/api/alerts", params={"acknowledged": "false"})
     assert response.status_code == 200
     assert [item["alert_id"] for item in response.json()] == [b.alert_id]
 
 
 def test_acknowledged_alerts_filter(client, alert_store) -> None:
-    """The acknowledged route should return only alerts an engineer has seen."""
+    """?acknowledged=true should return only alerts an engineer has seen."""
     a = _unsafe_pump_alert("event-1")
     b = build_alert(
         "event-2",
@@ -55,9 +55,22 @@ def test_acknowledged_alerts_filter(client, alert_store) -> None:
     alert_store.upsert(b)
     alert_store.acknowledge(a.alert_id)
 
-    response = client.get("/api/alerts/acknowledged")
+    response = client.get("/api/alerts", params={"acknowledged": "true"})
     assert response.status_code == 200
     assert [item["alert_id"] for item in response.json()] == [a.alert_id]
+
+
+def test_acknowledged_alias_routes_are_dropped(client) -> None:
+    """The convenience alias sub-paths no longer exist as routes.
+
+    ``/alerts/unacknowledged`` and ``/alerts/acknowledged`` duplicated
+    ``?acknowledged=`` and were never called by the dashboard, so they were
+    removed to leave one filtering route. They must be absent from the schema —
+    not merely shadowed — so nothing depends on them.
+    """
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/api/alerts/unacknowledged" not in paths
+    assert "/api/alerts/acknowledged" not in paths
 
 
 def test_alerts_query_param_selects_acknowledged(client, alert_store) -> None:
