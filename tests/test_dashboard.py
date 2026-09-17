@@ -36,9 +36,10 @@ def test_dashboard_index_is_served() -> None:
 
 
 def test_dashboard_defaults_site_name_to_adupe_example() -> None:
-    """Adupe remains the default example site, now as an editable default."""
-    script = client.get("/static/app.js").text
-    assert "Adupe" in script
+    """Adupe is presented as the fixed fictional demo facility."""
+    body = client.get("/").text
+    assert "Adupe Municipal Water Station" in body
+    assert "Fictional demo facility" in body
 
 
 def test_dashboard_has_tabbed_navigation() -> None:
@@ -85,20 +86,34 @@ def test_dashboard_alerts_view_supports_ack_filter_and_id_search() -> None:
     assert 'id="alert-search"' in body
 
 
-def test_dashboard_allows_renaming_the_site() -> None:
-    """The monitored site name is editable, with no fixed 'example' label."""
+def test_dashboard_site_identity_is_not_editable() -> None:
+    """The single supported demo site is rendered as text, not an input."""
     body = client.get("/").text
     assert 'id="site-name"' in body
-    assert "example deployment" not in body.lower()
+    assert '<input id="site-name"' not in body
 
 
-def test_dashboard_script_persists_name_and_copies_ids() -> None:
-    """The client persists the site name and can copy an alert id."""
+def test_dashboard_script_copies_ids_without_site_local_storage() -> None:
+    """The client can copy alert IDs without relabelling the fixed site."""
     script = client.get("/static/app.js").text
-    assert "localStorage" in script
+    assert "localStorage" not in script
     assert "clipboard" in script
     # Uses the acknowledged endpoint or client-side ack filtering.
     assert "acknowledged" in script
+
+
+def test_dashboard_events_use_a_scenario_selector() -> None:
+    """The event filter offers registered choices instead of exact text input."""
+    body = client.get("/").text
+    assert '<select id="event-scenario-filter">' in body
+    assert '<option value="">All scenarios</option>' in body
+
+
+def test_dashboard_labels_the_high_level_limit() -> None:
+    """The plant view explains the red safety-limit marker."""
+    body = client.get("/").text
+    assert 'data-field="high_level_limit"' in body
+    assert "Red marker: high-level limit" in body
 
 
 def test_dashboard_script_supports_tab_switching() -> None:

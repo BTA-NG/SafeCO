@@ -40,14 +40,9 @@
       <div class="content">
         <header class="topbar">
           <div class="site">
-            <label class="site-label" for="site-name">Monitored site</label>
-            <input
-              id="site-name"
-              class="site-name"
-              type="text"
-              aria-label="Monitored site name (editable)"
-              maxlength="80"
-            />
+            <span class="site-label">Monitored site</span>
+            <span id="site-name" class="site-name">Adupe Municipal Water Station</span>
+            <span class="site-context">Fictional demo facility</span>
           </div>
           <div class="live">
             <span class="live-dot" id="live-dot" aria-hidden="true"></span>
@@ -70,6 +65,7 @@
                 <div class="stat"><span class="stat-key">Inlet valve</span><span class="stat-val" data-field="inlet_valve_state"><span class="pill">—</span></span></div>
                 <div class="stat"><span class="stat-key">Outlet valve</span><span class="stat-val" data-field="outlet_valve_state"><span class="pill">—</span></span></div>
                 <div class="stat"><span class="stat-key">Target level</span><span class="stat-val" data-field="target_level">—</span></div>
+                <div class="stat"><span class="stat-key">High-level limit</span><span class="stat-val" data-field="high_level_limit">—</span></div>
               </div>
               <div class="level">
                 <div class="level-head">
@@ -81,6 +77,10 @@
                   <div class="level-limit" data-field="high_level_limit_mark" title="High-level limit"></div>
                 </div>
                 <div class="level-scale"><span>0%</span><span>100%</span></div>
+                <div class="level-legend">
+                  <span class="limit-key" aria-hidden="true"></span>
+                  <span>Red marker: high-level limit</span>
+                </div>
               </div>
             </div>
           </section>
@@ -129,8 +129,10 @@
             <div class="panel-head">
               <h2>Recent events</h2>
               <label class="inline">
-                Scenario
-                <input id="event-scenario-filter" type="text" placeholder="all scenarios" />
+                Filter by scenario
+                <select id="event-scenario-filter">
+                  <option value="">All scenarios</option>
+                </select>
               </label>
             </div>
             <p class="muted" data-empty>No events recorded yet.</p>

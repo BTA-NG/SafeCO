@@ -46,14 +46,18 @@ the advisory finding; it never changes the plant.
 
 ### Scenarios (registry + execution)
 
-- `GET /api/scenarios` — scenario IDs from `NORMAL_SCENARIOS` + `ATTACK_SCENARIOS`
+- `GET /api/scenarios` — scenario IDs from the normal, attack, and timing-jitter
+  attack registries
 - `GET /api/scenarios/{scenario_id}` — registration status, 404 if unknown
 - `POST /api/scenarios/{scenario_id}/run` — run a scenario (optional `seed`), persisting
   its events and any detector alerts; returns a summary (events, alerts,
   violations, reproducibility fingerprint), 404 if unknown
 
 Running a scenario drives the simulator so its consequences can be observed and
-explained. It never blocks a command or acts on a real plant.
+explained. The execution path uses the deterministic tuning-only baseline for
+the selected seed, so baseline-only attack fixtures produce their intended
+findings in the dashboard as well as in evaluation. It never blocks a command
+or acts on a real plant.
 
 ## Dashboard
 
@@ -69,14 +73,15 @@ refreshes immediately after any operator action.
   / acknowledged filters; search by alert ID; and per-alert severity, the alert ID
   with a copy button, explanation, evidence, a confidence meter, and recommended
   action, with a record-only acknowledge button.
-- **Events**: the recent event feed with a scenario filter and ground-truth labels.
+- **Events**: the recent event feed with a registered-scenario selector and
+  ground-truth labels.
 - **System health**: feed status, visibility, database availability, total events
   collected, and the last event timestamp.
 
-The monitored-site name shown top-left is an editable display label persisted in
-the browser (`localStorage`); it defaults to the Adupe example site. The palette is
-flat (light content, a dark sidebar, status/severity colours — no gradients). If the
-local feed is lost the console keeps the last-known values and shows a
+The monitored-site identity is fixed to Adupe Municipal Water Station, the
+fictional facility modelled by this submission. The palette is flat (light
+content, a dark sidebar, status/severity colours — no gradients). If the local
+feed is lost the console keeps the last-known values and shows a
 degraded-visibility banner. It never implies SafeCO acted automatically;
 acknowledgement is an engineer record, not a plant action.
 
@@ -94,9 +99,8 @@ acknowledgement is an engineer record, not a plant action.
 From the repository root:
 
 ```bash
-Set-Location ".\BTA-NG\SafeCO"
-$env:PYTHONPATH = "src"
-python -m uvicorn safeco.app:app --reload --host 127.0.0.1 --port 8000
+PYTHONPATH=src .venv/bin/python -m uvicorn safeco.app:app \
+  --host 127.0.0.1 --port 8000
 ```
 
 Then open http://127.0.0.1:8000/ for the dashboard. The default app object is

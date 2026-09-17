@@ -16,7 +16,6 @@
 // filter, manual refresh) so those changes are not gated by the interval.
 const POLL_MS = 2000;
 
-const SITE_NAME_KEY = "safeco.siteName";
 const DEFAULT_SITE_NAME = "Adupe Municipal Water Station";
 
 // Fetch a generous window so the operator can page through recent history
@@ -135,20 +134,12 @@ function setupTabs() {
   activateTab("plant");
 }
 
-/* ---------- Editable site name (persisted locally) ---------- */
+/* ---------- Fixed demo-site identity ---------- */
 
 function setupSiteName() {
-  const input = document.getElementById("site-name");
-  input.value = localStorage.getItem(SITE_NAME_KEY) || DEFAULT_SITE_NAME;
-  const persist = () => {
-    const name = input.value.trim() || DEFAULT_SITE_NAME;
-    input.value = name;
-    localStorage.setItem(SITE_NAME_KEY, name);
-    document.title = `SafeCO — ${name}`;
-  };
-  input.addEventListener("change", persist);
-  input.addEventListener("blur", persist);
-  document.title = `SafeCO — ${input.value}`;
+  const site = document.getElementById("site-name");
+  site.textContent = DEFAULT_SITE_NAME;
+  document.title = `SafeCO — ${DEFAULT_SITE_NAME}`;
 }
 
 /* ---------- Live status ---------- */
@@ -221,6 +212,9 @@ function renderPlant(payload) {
   setPill(body, "outlet_valve_state", p.outlet_valve_state);
   body.querySelector('[data-field="target_level"]').textContent = fmtPercent(
     p.target_level
+  );
+  body.querySelector('[data-field="high_level_limit"]').textContent = fmtPercent(
+    p.high_level_limit
   );
 
   body.querySelector('[data-field="tank_level"]').textContent = fmtPercent(
@@ -510,14 +504,25 @@ function renderHealth(health) {
 
 async function loadScenarios() {
   const select = document.getElementById("scenario-select");
+  const eventFilter = document.getElementById("event-scenario-filter");
   try {
     const ids = await getJSON(API.scenarios);
     select.textContent = "";
+    eventFilter.textContent = "";
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All scenarios";
+    eventFilter.appendChild(allOption);
     for (const id of ids) {
       const option = document.createElement("option");
       option.value = id;
       option.textContent = id;
       select.appendChild(option);
+
+      const filterOption = document.createElement("option");
+      filterOption.value = id;
+      filterOption.textContent = id;
+      eventFilter.appendChild(filterOption);
     }
   } catch (err) {
     /* Non-fatal: scenario controls stay empty if discovery fails. */
@@ -552,9 +557,9 @@ async function runScenario(event) {
 /* ---------- Event scenario filter ---------- */
 
 function setupEventFilter() {
-  const input = document.getElementById("event-scenario-filter");
-  input.addEventListener("input", () => {
-    state.eventScenario = input.value.trim();
+  const select = document.getElementById("event-scenario-filter");
+  select.addEventListener("change", () => {
+    state.eventScenario = select.value;
     paging.events.page = 1;
     refresh();
   });

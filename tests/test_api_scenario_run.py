@@ -54,6 +54,19 @@ def test_run_attack_scenario_persists_alerts(client) -> None:
     assert unsafe["acknowledged"] is False
 
 
+def test_run_baseline_attack_uses_trained_profile(client) -> None:
+    """A baseline-only attack should alert through the dashboard run path."""
+    response = client.post(
+        "/api/scenarios/attack_baseline_high_limit_01/run",
+        params={"seed": 42},
+    )
+    assert response.status_code == 200
+    assert response.json()["alerts"] >= 1
+
+    alerts = client.get("/api/alerts").json()
+    assert "baseline_deviation" in {alert["reason_code"] for alert in alerts}
+
+
 def test_run_is_deterministic_on_seed(client) -> None:
     """Same seed => same fingerprint, so a judge can reproduce a run."""
     first = client.post("/api/scenarios/startup_01/run", params={"seed": 7}).json()

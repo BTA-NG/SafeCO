@@ -26,10 +26,31 @@ state; it is distinct from autonomous response and is not a real-plant control p
 - Ruff lint/format rules and contributor workflow are documented in `AGENTS.md` and
   `CONTRIBUTING.md`.
 
-## Current evidence (25 August 2026)
+## Current evidence (17 September 2026)
 
-- `main` includes simulator, scenario, tooling, and backend integration PRs.
-- Latest merged integration commit: `80db5c1`.
+- `origin/main` is at `1a296d7`, merging dashboard PR #17 after the timing/noise
+  hardening PR #16. The merged tree includes the simulator, scenarios, detector,
+  evaluation, persistent API stores, scenario runner, and operator dashboard.
+- The merged dashboard branch passed Ruff, formatting, `git diff --check`, and
+  269 tests on the demo laptop before merge.
+- The final post-merge dashboard-clarity/baseline-integration changes passed all
+  required checks on the demo laptop on 17 September: Ruff lint, Ruff formatting,
+  `git diff --check`, and 273 tests in 3.00 seconds. The 28 warnings are
+  third-party Starlette/FastAPI deprecations under Python 3.14, not failures.
+- A live local run on 17 September verified the dashboard workflow: initial
+  degraded visibility with no events; `startup_01` creating three normal events
+  and a healthy feed; persisted event history; attack alerts; record-only
+  acknowledgement; and stale-feed degradation with last-known values retained.
+- Live attack evidence captured:
+  - `attack_injection_01` -> HIGH `unsafe_pump_start` alert.
+  - `attack_mistimed_01` -> HIGH `recovery_out_of_sequence` alert.
+  - `attack_replay_01` -> HIGH `command_replay` plus the related unsafe pump/inlet
+    invariant finding.
+  - `benign_noise_01` -> persisted normal events and no attack alert.
+- A direct post-review integration smoke test confirms `startup_01` produces
+  3 events/0 alerts, `benign_noise_01` 10/0, `attack_injection_01` 1/1
+  (`unsafe_pump_start`), and `attack_baseline_high_limit_01` 5/1
+  (`baseline_deviation`) with the dashboard runner's cached tuning-only profile.
 - Integration test verifies three simulator commands become ordered events, retain
   process context and register metadata, reach a detector callback, and verify the
   SQLite hash chain.
@@ -37,9 +58,15 @@ state; it is distinct from autonomous response and is not a real-plant control p
 - Ruff format check passes.
 - Maintenance, extended-normal, scenario fingerprint, and CLI tests passed in the
   Phase 2 scenario PR review (27 relevant tests).
-- Two live Modbus TCP tests cannot bind localhost in this restricted execution
-  environment. Re-run those tests on a normal developer laptop/CI and record the
-  result here.
+- Joseph's detector/evaluation review passed Ruff and formatting checks and 84
+  focused tests; the full detector branch reported 133 tests before merge.
+- Local Modbus TCP tests require an environment that permits localhost socket binding;
+  they passed in the developer worktree used to verify PR #15/#16. The restricted
+  agent sandbox may reject those sockets, so sandbox failures must not be reported as
+  product failures.
+- `source="scheduler"` identifies the deterministic simulator command channel;
+  `ground_truth` is synthetic evaluation metadata. Detection does not branch on
+  either field.
 
 ## Implemented scope
 
@@ -57,19 +84,49 @@ state; it is distinct from autonomous response and is not a real-plant control p
 - Protocol validation, cross-register-family rejection, and rejected-write protection.
 - Event serialization, SQLite persistence, chain verification, and simulator integration.
 - Advisory-only response semantics.
-- Human-confirmed simulator actions are an optional response demonstration; no
-  timeout or autonomous fallback is permitted.
+- Structured alerts with deterministic IDs, evidence, severity, confidence,
+  recommendations, and acknowledgement fields.
+- Detector layers for invariants, state transitions, replay/sequence, command-rate,
+  and setpoint drift checks.
+- Conservative median/MAD baseline scoring with baseline-only anomaly fixtures.
+- Scenario-level evaluation with explicit tuning, validation, and held-out splits,
+  classification counts, precision, recall, false-alert rate, and latency fields.
+- Human-confirmed simulator actions are documented as an optional response
+  demonstration; no timeout or autonomous fallback is permitted.
+- API routes are implemented for health, events, alerts, plant state, scenario
+  discovery, and scenario execution. Events and alerts persist in separate SQLite
+  stores; acknowledgements survive replay/restart.
+- The no-build dashboard provides plant state, registered-scenario event filtering,
+  alert filters/search, pagination, scenario execution, system health, and degraded
+  last-known visibility. The site identity is fixed to the fictional Adupe facility.
+- Scenario execution uses the canonical `run_scenario` path and runs the rule layers
+  plus the deterministic tuning-only median/MAD baseline cached by seed.
+- PR #16 adds bounded telemetry-noise and timing-jitter anomaly variants, observed
+  state snapshots for evaluation handoff, and realism evidence; these additions
+  preserve deterministic seeds and generator-version recording.
 
 ## Remaining required work
 
-- Four attack scenario runners: injection, replay, mistimed valid command, and gradual drift.
-- Hybrid detector: invariants, transition checks, replay/sequence, rate/drift, optional baseline.
-- Structured alert contract, evidence, severity, confidence, recommendation, and acknowledgement.
-- FastAPI endpoints and local dashboard.
-- Optional confirmed simulator action with operator and command audit fields.
-- Offline collection/reconnect catch-up and degraded-visibility state.
-- Held-out evaluation latency, confusion matrix, and expanded error analysis.
-- One-command demo packaging, screenshots, four-page report, and clean-checkout rehearsal.
+- Commit, push, and review the final UI/documentation/baseline-integration changes;
+  the complete required checks now pass on the demo laptop.
+- Capture clean held-out evaluation output, final metric tables, and representative
+  event/alert JSON from the final tree.
+- Select and archive the strongest dashboard screenshots, then write the final
+  maximum-four-page report.
+- Rehearse a clean-database, one-command local demo and prepare an offline screen
+  recording as fallback.
+- The optional engineer-confirmed simulator action remains unimplemented. Do not
+  imply that acknowledgement changes plant state.
+
+## Dashboard transport
+
+- The implemented dashboard uses two-second HTTP polling and immediate refresh after
+  scenario runs, acknowledgement, filter changes, and manual refresh.
+- SSE was preferred over WebSockets for a future push transport because the dashboard
+  is read-dominant and writes already use explicit REST calls. SSE is not implemented
+  and must not be claimed in the submission.
+- Any future stream must publish after successful persistence, use bounded per-client
+  queues, and never block the simulator, collector, or SQLite writer.
 
 ## Evidence to capture next
 
@@ -106,6 +163,10 @@ separate.
 - Scenario splits are explicit and non-overlapping: tuning, validation, and
   held-out.
 - Known limitations are tracked in `docs/detector_evaluation.md`.
+- Current evaluation results are synthetic and scenario-based; they are evidence of
+  reproducibility and detector behavior, not operational performance in a real plant.
+- Do not report baseline-enabled results without naming the tuning-only training set
+  and the separate validation/held-out scenarios.
 
 ## Process realism and benign anomalies (7 September 2026)
 
@@ -133,9 +194,10 @@ separate.
   from simulated elapsed time instead of wall clock, removing the nondeterministic
   `STALE_TIMESTAMP` false positive. See commit `56c692f` and flag for Joseph/Daniel
   review of `src/safeco/evaluation.py`.
-- Evaluation harness replays raw steps today and so sees clean traces; hooking
-  `ANOMALY_PLANS` into `events_for_scenario` when baseline metrics must exercise
-  the anomalies is a Joseph/Daniel follow-up.
+- `events_for_scenario` now composes canonical `run_scenario`, maps observed analog
+  telemetry into evaluated event features, and retains command-time discrete state.
+  Registered anomalies therefore reach evaluation without manufacturing transition
+  false positives.
 
 ## Hardening: attack timing variation + telemetry noise (8 September 2026)
 
@@ -148,12 +210,12 @@ separate.
   phase durations (pre-attack silence for injection/replay/mistimed; cadence for
   drift). Same command payloads and same invariant-violation set as the base
   attacks; detection must lean on process context, not fixed clock offsets.
-  Registered in a separate `ATTACK_JITTER_SCENARIOS` registry so the existing
-  `ATTACK_SCENARIOS` exact-set assertion and eval id→reason mapping are unchanged.
+  Registered in `ATTACK_JITTER_SCENARIOS`; evaluation and API discovery combine the
+  base and jitter attack registries, with each jitter variant mapped to its base
+  attack reason code.
 - Generator version bumped to `safeco-scenarios/1.3`.
-- Evaluation handoff seam: `observed_state_snapshots(scenario_id, seed)` exposes
-  the observed series; mapping it onto `Event.process` inside `events_for_scenario`
-  (and retraining Layer 5 on the noisy benign track) is Joseph's follow-up.
+- `ScenarioResult.step_durations` records perturbed durations, so evaluation event
+  timestamps and detection latency reflect the actual jittered simulated timeline.
 - Reproducible fingerprints (seed 42):
   - `benign_noise_01` (normal): `6ff5662b1a1cdb43b73d30310bf4381c381d249645467e719a4be35da85eca2f`
   - `attack_injection_jitter_01` (injection): `11f5cfdd81281a156c30609dc9d4742da16568d72681b20c966acaee35333d44`
