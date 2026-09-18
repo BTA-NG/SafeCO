@@ -178,7 +178,7 @@ def test_dashboard_sidebar_header_uses_logo_lockup() -> None:
     lockup = body.split('class="brand-lockup"', 1)[1].split("</div>", 1)[0]
     # Transparent inline SVG mark (no boxed backing) beside the wordmark.
     assert "<svg" in lockup
-    assert 'class="product">SafeCO<' in lockup
+    assert 'class="product">Safe<span' in lockup
     assert "<rect" not in lockup
     # Subtitle stays directly below the full lockup row.
     assert 'class="brand-sub">advisory command monitor<' in body

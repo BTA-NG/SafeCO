@@ -83,7 +83,7 @@ body {
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
 
 .brand-lockup > svg {
@@ -92,9 +92,14 @@ body {
 }
 
 .product {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: 0.4px;
+}
+
+.product-co {
+  color: #F5A623;
+  font-style: italic;
 }
 
 .brand-sub {
@@ -182,24 +187,30 @@ body {
 .site {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .site-label {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.8px;
   color: var(--muted);
+  font-weight: 600;
 }
 
 .site-name {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--ink);
+  letter-spacing: -0.2px;
 }
 
 .site-context {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
+  font-style: italic;
 }
 
 .live {
