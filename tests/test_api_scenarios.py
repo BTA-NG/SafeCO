@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
+from safeco.scenarios import ATTACK_JITTER_SCENARIOS, ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
 
 def test_scenario_list_includes_all_scenarios(client) -> None:
@@ -19,6 +19,9 @@ def test_scenario_list_includes_all_scenarios(client) -> None:
     for scenario_id in ATTACK_SCENARIOS:
         assert scenario_id in scenarios
 
+    for scenario_id in ATTACK_JITTER_SCENARIOS:
+        assert scenario_id in scenarios
+
 
 def test_scenario_list_sorted_and_complete(client) -> None:
     """The scenario list should be sorted and match the full registry."""
@@ -26,7 +29,11 @@ def test_scenario_list_sorted_and_complete(client) -> None:
     assert response.status_code == 200
     scenarios = response.json()
 
-    all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    all_scenarios = {
+        **NORMAL_SCENARIOS,
+        **ATTACK_SCENARIOS,
+        **ATTACK_JITTER_SCENARIOS,
+    }
     assert scenarios == sorted(all_scenarios.keys())
 
 
@@ -59,3 +66,15 @@ def test_scenario_detail_validates_attack_scenarios(client) -> None:
     payload = response.json()
     assert payload["scenario_id"] == scenario_id
     assert payload["status"] == "registered"
+
+
+def test_scenario_detail_validates_jitter_attack_scenarios(client) -> None:
+    """Timing-jitter attack IDs should be discoverable through the API."""
+    scenario_id = list(ATTACK_JITTER_SCENARIOS.keys())[0]
+
+    response = client.get(f"/api/scenarios/{scenario_id}")
+    assert response.status_code == 200
+    assert response.json() == {
+        "scenario_id": scenario_id,
+        "status": "registered",
+    }

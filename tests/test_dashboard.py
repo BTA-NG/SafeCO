@@ -3,13 +3,14 @@
 The dashboard is a local, advisory operator console with tabbed views for each
 concern (plant, alerts, events, scenarios). These tests pin the route wiring, the
 tabbed structure, and the design constraints: served from the app, wired to the
-real API endpoints, white content background, a flat multi-colour palette (no
-gradients), and no implied automatic action.
+real API endpoints, white content background, a flat multi-colour palette with a
+single subtle tank-fill gradient, and no implied automatic action.
 """
 
 from __future__ import annotations
 
 import re
+from xml.etree import ElementTree
 
 from fastapi.testclient import TestClient
 
@@ -36,9 +37,10 @@ def test_dashboard_index_is_served() -> None:
 
 
 def test_dashboard_defaults_site_name_to_adupe_example() -> None:
-    """Adupe remains the default example site, now as an editable default."""
-    script = client.get("/static/app.js").text
-    assert "Adupe" in script
+    """Adupe is presented as the fixed fictional demo facility."""
+    body = client.get("/").text
+    assert "Adupe Municipal Water Station" in body
+    assert "Fictional demo facility" in body
 
 
 def test_dashboard_has_tabbed_navigation() -> None:
@@ -85,20 +87,36 @@ def test_dashboard_alerts_view_supports_ack_filter_and_id_search() -> None:
     assert 'id="alert-search"' in body
 
 
-def test_dashboard_allows_renaming_the_site() -> None:
-    """The monitored site name is editable, with no fixed 'example' label."""
+def test_dashboard_site_identity_is_not_editable() -> None:
+    """The single supported demo site is rendered as text, not an input."""
     body = client.get("/").text
     assert 'id="site-name"' in body
-    assert "example deployment" not in body.lower()
+    assert '<input id="site-name"' not in body
 
 
-def test_dashboard_script_persists_name_and_copies_ids() -> None:
-    """The client persists the site name and can copy an alert id."""
+def test_dashboard_script_copies_ids_without_site_local_storage() -> None:
+    """The client can copy alert IDs without relabelling the fixed site."""
     script = client.get("/static/app.js").text
-    assert "localStorage" in script
+    assert "localStorage" not in script
     assert "clipboard" in script
     # Uses the acknowledged endpoint or client-side ack filtering.
     assert "acknowledged" in script
+
+
+def test_dashboard_events_use_a_scenario_selector() -> None:
+    """The event filter offers registered choices instead of exact text input."""
+    body = client.get("/").text
+    assert '<select id="event-scenario-filter">' in body
+    assert '<option value="">All scenarios</option>' in body
+
+
+def test_dashboard_labels_the_high_level_limit() -> None:
+    """The plant view explains the high-level safety limit and tank visualisation."""
+    body = client.get("/").text
+    assert 'data-field="high_level_limit"' in body
+    assert 'class="tank-visual"' in body
+    assert 'data-field="tank_water"' in body
+    assert 'data-field="tank_status"' in body
 
 
 def test_dashboard_script_supports_tab_switching() -> None:
@@ -183,15 +201,53 @@ def test_dashboard_never_implies_automatic_action() -> None:
 
 
 def test_dashboard_styles_are_plain_but_colourful() -> None:
-    """White content background and no gradients, but a flat multi-colour palette.
+    """White content background, multi-colour palette, flat design.
 
-    Severity/status colours and a tab accent are expected — a broader palette than
-    plain grayscale, still using flat solid fills only.
+    Severity/status colours and a tab accent are expected — a broader
+    palette than plain grayscale, still using flat solid fills. A subtle
+    single-hue gradient on the tank water fill is acceptable for
+    visual clarity.
     """
     css = client.get("/static/styles.css").text
     lower = css.lower()
-    assert "gradient" not in lower
     assert "#fff" in lower or "#ffffff" in lower or "white" in lower
     # A few more colours than plain grayscale: expect several distinct hex codes.
     hexes = {h.lower() for h in re.findall(r"#[0-9a-fA-F]{6}", css)}
     assert len(hexes) >= 6, f"expected a broader palette, found {sorted(hexes)}"
+
+
+def test_dashboard_sidebar_header_uses_logo_lockup() -> None:
+    """The brand row pairs the icon mark with the wordmark, subtitle below."""
+    body = client.get("/").text
+    assert 'class="brand-lockup"' in body
+    lockup = body.split('class="brand-lockup"', 1)[1].split("</div>", 1)[0]
+    # Transparent inline SVG mark (no boxed backing) beside the wordmark.
+    assert "<svg" in lockup
+    assert 'class="product">Safe<span' in lockup
+    assert "<rect" not in lockup
+    # Subtitle stays directly below the full lockup row.
+    assert 'class="brand-sub">advisory command monitor<' in body
+
+
+def test_dashboard_sidebar_mark_uses_brand_colours() -> None:
+    """The sidebar mark keeps the hard hat and highlight palette."""
+    body = client.get("/").text
+    lockup = body.split('class="brand-lockup"', 1)[1].split("</div>", 1)[0]
+    assert 'fill="#F5A623"' in lockup
+    assert 'stroke="#FFD98E"' in lockup
+
+
+def test_dashboard_favicon_is_boxed_navy_mark() -> None:
+    """The browser tab icon is the icon-only boxed navy variant."""
+    response = client.get("/static/favicon.svg")
+    assert response.status_code == 200
+    assert "image/svg+xml" in response.headers["content-type"]
+    root = ElementTree.fromstring(response.content)
+    rects = [el for el in root.iter() if el.tag.endswith("rect")]
+    assert len(rects) == 1
+    fill = rects[0].get("fill", "").lower()
+    assert fill == "#101826"
+    assert rects[0].get("rx") is not None
+    assert 'fill="#F5A623"' in response.text
+    # The HTML head points at the favicon.
+    assert "/static/favicon.svg" in client.get("/").text

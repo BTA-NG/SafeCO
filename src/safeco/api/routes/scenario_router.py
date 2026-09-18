@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from safeco.api.deps import AlertStoreDep, BusDep, StoreDep
 from safeco.api.scenario_runner import run_scenario_and_persist
-from safeco.scenarios import ATTACK_SCENARIOS, NORMAL_SCENARIOS
+from safeco.scenarios import ATTACK_JITTER_SCENARIOS, ATTACK_SCENARIOS, NORMAL_SCENARIOS
 
 router = APIRouter(tags=["scenarios"])
 
@@ -21,14 +21,18 @@ router = APIRouter(tags=["scenarios"])
 async def list_scenarios() -> list[str]:
     """List every scenario id the operator can run.
 
-    Merges the normal and attack scenario registries so the dashboard's
-    scenario picker can offer both benign and attack runs from one call.
+    Merges the normal, base-attack, and timing-jitter attack registries so the
+    dashboard's scenario picker exposes every runnable scenario.
 
     Returns:
         A sorted list of scenario id strings.
 
     """
-    all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    all_scenarios = {
+        **NORMAL_SCENARIOS,
+        **ATTACK_SCENARIOS,
+        **ATTACK_JITTER_SCENARIOS,
+    }
     return sorted(all_scenarios.keys())
 
 
@@ -46,11 +50,14 @@ async def get_scenario(scenario_id: str) -> dict[str, str]:
         A dict with the scenario id and a ``registered`` status.
 
     Raises:
-        HTTPException: 404 if the id is in neither the normal nor attack
-            scenario registry.
+        HTTPException: 404 if the id is not in any runnable scenario registry.
 
     """
-    all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    all_scenarios = {
+        **NORMAL_SCENARIOS,
+        **ATTACK_SCENARIOS,
+        **ATTACK_JITTER_SCENARIOS,
+    }
     if scenario_id not in all_scenarios:
         raise HTTPException(
             status_code=404, detail=f"scenario {scenario_id!r} not found"
