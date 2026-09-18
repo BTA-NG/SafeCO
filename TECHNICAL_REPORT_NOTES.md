@@ -6,45 +6,31 @@ Do not add unverified claims.
 
 ---
 
-## What SafeCO is (one sentence)
+## Executive Summary
 
-SafeCO is a local-first monitor that watches commands sent to a simulated
-water plant, detects the ones that are unsafe, explains why, and tells a
-human — it never blocks or changes anything on its own.
+SafeCO is a local-first, advisory cybersecurity monitor for industrial control systems. It detects commands that are protocol-valid but unsafe in the current process context — the kind of commands that Modbus would happily deliver, but that could cause real harm depending on what the plant is doing right now.
+
+Built for the ICSC 2026 hackathon, SafeCO monitors **Adupe Municipal Water Station**, a fictional municipal water facility, through a deterministic Modbus TCP simulator.
 
 ---
 
-## The problem we solve
+## The Problem
 
-Industrial control systems accept commands over protocols like Modbus. A
-command can be perfectly valid according to the protocol (correct register,
-correct value) but still dangerous given the current state of the plant.
-For example: turning on a pump when the inlet valve is closed, or raising
-the tank level above the safety limit.
+Industrial control systems accept commands over protocols like Modbus. A command can be perfectly valid according to the protocol (correct register, correct value) but still dangerous given the current state of the plant. For example: turning on a pump when the inlet valve is closed, or raising the tank level above the safety limit.
 
 SafeCO catches these "valid but unsafe" commands.
 
 ---
 
-## The fictional plant: Adupe Municipal Water Station
+## Architecture
 
-- A water tank with an inlet valve, outlet valve, and pump.
-- Registers follow the Modbus convention (read/write, 0x addresses).
-- The plant has a target level (default 70%) and a high-level safety
-  limit (default 90%).
-- The simulator is deterministic: same seed = same commands = same result.
-- Plant model: `src/safeco/plant.py`
-- Register map: `docs/plant_contract.md`
+<p align="center">
+  <img src="docs/architecture.png" alt="SafeCO Architecture" width="800" />
+</p>
 
----
-
-## How it works (the pipeline)
-
+**Pipeline:**
 ```
-Simulator  →  EventCollector  →  SQLite  →  Detector  →  Alerts
-  (generates     (normalises      (stores      (checks     (advises
-   commands)      into Event       with hash    rules +     the human)
-                  contract)        chain)       baseline)
+Simulator → EventCollector → SQLite → Detector → Alerts → Dashboard
 ```
 
 1. **Simulator** generates commands (open valve, start pump, etc.)
@@ -56,7 +42,7 @@ Simulator  →  EventCollector  →  SQLite  →  Detector  →  Alerts
 
 ---
 
-## The 5 detection layers
+## Detection Layers
 
 | Layer | What it checks | Example |
 |-------|---------------|---------|
@@ -66,12 +52,11 @@ Simulator  →  EventCollector  →  SQLite  →  Detector  →  Alerts
 | 4 | Command rate | Too many commands too fast |
 | 5 | Statistical baseline | Tank level deviates beyond learned normal range |
 
-Layers 1-4 are deterministic rules. Layer 5 uses a median/MAD
-statistical profile trained only from benign (normal) scenarios.
+Layers 1-4 are deterministic rules. Layer 5 uses a median/MAD statistical profile trained only from benign (normal) scenarios.
 
 ---
 
-## What SafeCO detects (attack types)
+## Attack Types
 
 | Attack | What happens | Expected alert |
 |--------|-------------|----------------|
@@ -83,36 +68,9 @@ statistical profile trained only from benign (normal) scenarios.
 
 ---
 
-## Scenario categories
+## Evaluation Results
 
-**Normal (no attack expected):**
-- `startup_01` — system boots up
-- `extended_normal_01` — ~969 seconds of normal operation
-- `benign_noise_01` — normal operation with sensor noise
-- `benign_spike_01` — brief tank-level blip, self-restoring
-- `benign_duty_jitter_01` — drain/fill timing varies ±15%
-- `benign_setpoint_nudge_01` — small target-level blip
-- `maintenance_01` — maintenance mode with authorised changes
-
-**Attack (alert expected):**
-- `attack_injection_01` / `attack_injection_jitter_01`
-- `attack_replay_01` / `attack_replay_jitter_01`
-- `attack_mistimed_01` / `attack_mistimed_jitter_01`
-- `attack_drift_01` / `attack_drift_jitter_01`
-- `attack_baseline_low_tank_01`
-- `attack_baseline_high_limit_01`
-- `attack_baseline_mode_context_01`
-
-The `_jitter_01` variants use the same attack commands but vary the
-timing. This proves detection relies on process context, not fixed
-clock offsets.
-
----
-
-## Evaluation results
-
-The evaluator (`src/safeco/evaluation.py`) replays scenarios through
-the detector and reports precision, recall, and detection latency.
+The evaluator (`src/safeco/evaluation.py`) replays scenarios through the detector and reports precision, recall, and detection latency.
 
 **Key results (seed 42):**
 
@@ -123,23 +81,17 @@ the detector and reports precision, recall, and detection latency.
 | `attack_injection_01` | 1 | 1 | `unsafe_pump_start` |
 | `attack_baseline_high_limit_01` | 5 | 1 | `baseline_deviation` |
 
-Precision and recall are both 1.0 across the evaluated scenarios.
-The baseline-only anomaly scenarios (`attack_baseline_*`) produce
-alerts that rules alone would miss, demonstrating Layer 5's added
-coverage.
+Precision and recall are both 1.0 across the evaluated scenarios. The baseline-only anomaly scenarios (`attack_baseline_*`) produce alerts that rules alone would miss, demonstrating Layer 5's added coverage.
 
-**Important:** These are synthetic, scenario-based results. They
-demonstrate reproducibility and detector behaviour, not operational
-performance in a real plant.
+**Important:** These are synthetic, scenario-based results. They demonstrate reproducibility and detector behaviour, not operational performance in a real plant.
 
 ---
 
-## The operator dashboard
+## Dashboard
 
-A vanilla HTML/CSS/JS dashboard (no build step, no framework) served
-by the FastAPI backend at `/`.
+A vanilla HTML/CSS/JS dashboard (no build step, no framework) served by the FastAPI backend at `/`.
 
-**What it shows:**
+**Features:**
 - Plant state: mode, power, pump/valve states, target/limit levels
 - Animated SVG tank with flowing water waves, Target and Limit markers
 - Alerts: severity, evidence, confidence, recommendations, ack button
@@ -147,35 +99,21 @@ by the FastAPI backend at `/`.
 - Scenarios: select, set seed, run, see results appear
 - System health: feed status, event count, hash chain integrity
 
-**How it updates:** 2-second HTTP polling (with SSE transport in progress
-via a parallel PR). Refreshes immediately after scenario runs,
-acknowledgement, filter changes, or manual button click.
-
-**What it does NOT do:**
-- Acknowledgement is record-only — it does not change plant state
-
-**Dashboard screenshots needed for report:**
-1. Plant state tab (showing tank with waves and markers)
-2. Alerts tab (showing an attack alert with evidence)
-3. Scenarios tab (showing scenario selector and run result)
-4. System health tab (showing feed status and hash chain)
+**How it updates:** 2-second HTTP polling (SSE transport in progress). Refreshes immediately after scenario runs, acknowledgement, filter changes, or manual button click.
 
 ---
 
-## Known limitations
+## Known Limitations
 
-- The dashboard runner builds events from the simulator's true state, not
-  observed telemetry snapshots. Benign anomaly scenarios (noise, spikes,
-  setpoint nudges) that perturb only the observed layer will not show the
-  perturbed values in the dashboard event history. The evaluation CLI
-  uses observed snapshots and may therefore differ.
-- Alert acknowledgement is record-only and never changes plant state.
-- The confirmed simulator-action concept is not implemented.
-- Results are based on deterministic synthetic scenarios, not real plant data.
+- **True vs observed state**: The dashboard runner builds events from the simulator's true state, not observed telemetry snapshots. Benign anomaly scenarios (noise, spikes, setpoint nudges) that perturb only the observed layer will not show the perturbed values in the dashboard event history. The evaluation CLI uses observed snapshots and may therefore differ.
+- **Train/serve mismatch**: `train_baseline_from_scenarios` trains on observed features, while the dashboard feeds the same profile true-state features. This feature distribution mismatch is noted but produced no alerts on either path.
+- **Alert acknowledgement**: Record-only — never changes plant state.
+- **Confirmed simulator-action**: Documented but not implemented.
+- **Results**: Based on deterministic synthetic scenarios, not real plant data.
 
 ---
 
-## What is NOT implemented (do not claim these)
+## What is NOT Implemented
 
 - Autonomous shutdown or blocking of commands
 - Engineer-confirmed simulator action (documented but not built)
@@ -185,20 +123,19 @@ acknowledgement, filter changes, or manual button click.
 
 ---
 
-## Accuracy guardrails (read before writing the report)
+## Accuracy Guardrails
 
 1. Adupe is fictional. Never imply it is a real facility.
 2. Modbus validity ≠ process safety. A valid Modbus write can still be unsafe.
 3. The hash chain detects stored-event tampering, not fake sensors.
 4. Internet loss ≠ loss of the local control feed. These are different.
 5. Critical alerts recommend checks; a human decides what to do.
-6. Baseline training uses ONLY benign tuning scenarios. Never imply
-   validation or held-out scenarios were used for training.
+6. Baseline training uses ONLY benign tuning scenarios. Never imply validation or held-out scenarios were used for training.
 7. All results are synthetic and scenario-based.
 
 ---
 
-## Verification checklist (for the report)
+## Verification
 
 Run from repo root:
 
@@ -209,17 +146,15 @@ PYTHONPATH=src .venv/bin/python -m pytest -q  # Tests
 git diff --check                         # Whitespace
 ```
 
-Current status: 277 tests passing, 28 third-party warnings
-(Starlette/FastAPI deprecations under Python 3.14, not failures).
+Current status: 277 tests passing, 28 third-party warnings (Starlette/FastAPI deprecations under Python 3.14, not failures).
 
 ---
 
-## Report structure (4 pages max)
+## Report Structure (4 pages max)
 
 1. **Problem & approach** — What SafeCO does, why it matters (1 paragraph)
 2. **Architecture** — Simulator → Collector → SQLite → Detector → Alerts
 3. **Detection** — 5 layers, baseline training, attack types
 4. **Evaluation** — Scenarios, results, dashboard screenshots, limitations
 
-Keep each section tight. Screenshots will take ~1 page. Text must fit
-in ~3 pages.
+Keep each section tight. Screenshots will take ~1 page. Text must fit in ~3 pages.
