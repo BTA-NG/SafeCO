@@ -1,188 +1,225 @@
 # SafeCO Technical Report Notes
 
-Working evidence file for the final ICSC 2026 technical report (maximum four pages).
-Keep claims here tied to a reproducible command, test, scenario, or stored artifact.
+Source of truth for the ICSC 2026 technical report (maximum 4 pages).
+Every claim below is tied to a file, test, command, or stored artifact.
+Do not add unverified claims.
 
-## Submission claim
+---
 
-SafeCO is a local-first, explainable monitor for unsafe commands in a simulated
-Adupe Municipal Water Station. It detects commands that are protocol-valid but
-unsafe in the current process context, preserves evidence, and advises an engineer.
-It never independently blocks, reverses, delays, or issues a consequential
-plant-control command.
+## What SafeCO is (one sentence)
 
-SafeCO may support a simulator-only action explicitly confirmed by an engineer.
-That action records the operator, alert, exact command, timestamp, and resulting
-state; it is distinct from autonomous response and is not a real-plant control path.
+SafeCO is a local-first monitor that watches commands sent to a simulated
+water plant, detects the ones that are unsafe, explains why, and tells a
+human — it never blocks or changes anything on its own.
 
-## Architecture proof points
+---
 
-- Frozen plant/register contract: `src/safeco/plant.py`, `docs/plant_contract.md`.
-- Deterministic Adupe simulator with seeded commands, snapshots, and normal scenarios.
-- Localhost Modbus TCP adapter with rejected-write recording.
-- Shared normalized `Event` contract in `src/safeco/events.py`.
-- SQLite WAL event store retaining raw JSON and a tamper-evident hash chain.
-- Backend integration path: simulator command -> `EventCollector` -> SQLite -> detector callback.
-- Ruff lint/format rules and contributor workflow are documented in `AGENTS.md` and
-  `CONTRIBUTING.md`.
+## The problem we solve
 
-## Current evidence (25 August 2026)
+Industrial control systems accept commands over protocols like Modbus. A
+command can be perfectly valid according to the protocol (correct register,
+correct value) but still dangerous given the current state of the plant.
+For example: turning on a pump when the inlet valve is closed, or raising
+the tank level above the safety limit.
 
-- `main` includes simulator, scenario, tooling, and backend integration PRs.
-- Latest merged integration commit: `80db5c1`.
-- Integration test verifies three simulator commands become ordered events, retain
-  process context and register metadata, reach a detector callback, and verify the
-  SQLite hash chain.
-- Ruff check passes.
-- Ruff format check passes.
-- Maintenance, extended-normal, scenario fingerprint, and CLI tests passed in the
-  Phase 2 scenario PR review (27 relevant tests).
-- Live Modbus TCP tests (`tests/test_modbus_server.py`, all 6) pass on a normal
-  developer machine (16 September 2026, Phase 5 close-out gate): the earlier
-  localhost-bind restriction no longer applies here.
+SafeCO catches these "valid but unsafe" commands.
 
-## Implemented scope
+---
 
-- Plant state, register map, safety invariants, and deterministic physics.
-- Normal scenarios: startup, steady running, controlled shutdown, grid recovery,
-  maintenance, and an extended normal run.
-- `maintenance_01`: labelled `maintenance`; enters maintenance mode, performs five
-  authorised +1% target-level changes and five restores, then returns to RUNNING
-  with no invariant violations.
-- `extended_normal_01`: approximately 969 simulated seconds of demand variation
-  plus a benign outlet-valve service cycle; tested level range remains bounded.
-- Seed, generator-version, ground-truth, and SHA-256 scenario-fingerprint recording
-  provide reproducibility evidence. The scenario CLI can print run metadata and a
-  fingerprint using `python -m safeco.scenarios <scenario> --seed 42 --fingerprint`.
-- Protocol validation, cross-register-family rejection, and rejected-write protection.
-- Event serialization, SQLite persistence, chain verification, and simulator integration.
-- Advisory-only response semantics.
-- Human-confirmed simulator actions are an optional response demonstration; no
-  timeout or autonomous fallback is permitted.
+## The fictional plant: Adupe Municipal Water Station
 
-## Remaining required work
+- A water tank with an inlet valve, outlet valve, and pump.
+- Registers follow the Modbus convention (read/write, 0x addresses).
+- The plant has a target level (default 70%) and a high-level safety
+  limit (default 90%).
+- The simulator is deterministic: same seed = same commands = same result.
+- Plant model: `src/safeco/plant.py`
+- Register map: `docs/plant_contract.md`
 
-- Four attack scenario runners: injection, replay, mistimed valid command, and gradual drift.
-- Hybrid detector: invariants, transition checks, replay/sequence, rate/drift, optional baseline.
-- Structured alert contract, evidence, severity, confidence, recommendation, and acknowledgement.
-- FastAPI endpoints and local dashboard.
-- Optional confirmed simulator action with operator and command audit fields.
-- Offline collection/reconnect catch-up and degraded-visibility state.
-- Held-out evaluation latency, confusion matrix, and expanded error analysis.
-- One-command demo packaging, screenshots, four-page report, and clean-checkout rehearsal.
+---
 
-## Evidence to capture next
+## How it works (the pipeline)
 
-For each scenario, record: command to run, seed, generator version, fingerprint,
-event count, expected ground truth, alert result, detection latency, and a
-representative event/alert JSON pair. Keep tuning/validation/held-out scenario IDs
-separate.
+```
+Simulator  →  EventCollector  →  SQLite  →  Detector  →  Alerts
+  (generates     (normalises      (stores      (checks     (advises
+   commands)      into Event       with hash    rules +     the human)
+                  contract)        chain)       baseline)
+```
 
-## Detector evaluation notes
+1. **Simulator** generates commands (open valve, start pump, etc.)
+2. **Collector** wraps each command into a normalised Event record
+3. **SQLite** stores every event with a SHA-256 hash chain (tamper evidence)
+4. **Detector** evaluates each event against 5 layers of checks
+5. **Alerts** are generated with severity, evidence, and recommendations
+6. **Dashboard** shows everything to the operator in real time
 
-- `src/safeco/evaluation.py` replays complete normal and attack scenarios through
-  the shared event contract and detector.
-- The evaluator reports precision, recall, false alerts per normal hour, missed
-  attacks, maintenance false positives, first detection event ID, and detection
-  latency in events and seconds.
-- Evaluation reports include a per-scenario classification table and aggregate
-  TP/FP/TN/FN counts.
-- Attack expectations are explicit: injection -> `unsafe_pump_start`, replay ->
-  `command_replay`, mistimed -> `recovery_out_of_sequence`, and drift ->
-  `setpoint_drift`.
-- Layer 5 statistical baseline training is implemented in `src/safeco/baseline.py`
-  using conservative median/MAD feature ranges learned from benign scenario
-  traces.
-- The evaluation CLI enables the baseline by default. Use `--without-baseline`
-  for rule-only metrics, or `--compare` to print rule-only and baseline-enabled
-  reports side by side.
-- Baseline-enabled metrics train Layer 5 only from benign tuning scenarios;
-  validation and held-out scenarios are excluded from `BaselineProfile.training_scenarios`.
-- Three baseline-only anomaly scenarios demonstrate Layer 5's added coverage:
-  `attack_baseline_low_tank_01`, `attack_baseline_high_limit_01`, and
-  `attack_baseline_mode_context_01`.
-- `python -m safeco.evaluation --samples-json` emits representative event/alert
-  JSON pairs for report evidence.
-- Scenario splits are explicit and non-overlapping: tuning, validation, and
-  held-out.
-- Known limitations are tracked in `docs/detector_evaluation.md`.
+---
 
-## Process realism and benign anomalies (7 September 2026)
+## The 5 detection layers
 
-- Three benign-anomaly scenarios extend `extended_normal_01`, all labelled
-  `normal` and invariant-free:
-  - `benign_spike_01` — transient +3% tank-level sensor blip, self-restoring.
-  - `benign_duty_jitter_01` — drain/fill durations jittered ±15% per cycle.
-  - `benign_setpoint_nudge_01` — observed target-level +0.5% blip then restore.
-- Anomalies perturb the *observed* telemetry copy only; the true `PlantState`
-  is never mutated, so invariant checks cannot trip on a sensor artifact
-  (`_perturbed_observed` in `src/safeco/scenarios.py`).
-- Deterministic, seed-keyed anomaly RNG: `Random(f"{seed}:{scenario_id}:{GENERATOR_VERSION}")`.
-- Generator version bumped to `safeco-scenarios/1.2`.
-- Process-realism evidence module `src/safeco/realism.py` checks level bounds,
-  flow balance, valve/pump consistency, bounded tank slew, zero violations,
-  and monotonic event timestamps per scenario. Reproduce:
-  ```bash
-  PYTHONPATH=src .venv/bin/python -c "from safeco.realism import check_process_realism; print(check_process_realism('benign_duty_jitter_01'))"
-  ```
-- Reproducible fingerprints (seed 42):
-  - `benign_spike_01`: `637543c89fb71784e77fbbe334c8bbd6729f425d372766383dc29b9007fa3047`
-  - `benign_duty_jitter_01`: `20567190cdee4d630a6d88c413277219b6cabaafff54f4314ccbc76dfbd43bdd`
-  - `benign_setpoint_nudge_01`: `60b941e6e5c479882c91f4d2daaa6d456e8a890eb2c908c4418df46232b9c074`
-- Evaluation timestamp fix (Task 2): scenario event traces are now stamped
-  from simulated elapsed time instead of wall clock, removing the nondeterministic
-  `STALE_TIMESTAMP` false positive. See commit `56c692f` and flag for Joseph/Daniel
-  review of `src/safeco/evaluation.py`.
-- Phase 5 close-out (16 September 2026): `events_for_scenario` now merges each
-  step's observed snapshot into `Event.process` (`_process_at`), so baseline
-  metrics exercise the anomaly plans (`30a85c4`/`ab3c2e7`). Follow-up resolved.
+| Layer | What it checks | Example |
+|-------|---------------|---------|
+| 1 | Protocol invariants | Pump on but inlet valve closed |
+| 2 | State transitions | Mode change without proper sequence |
+| 3 | Replay / sequence | Same command sent twice, or recovery out of order |
+| 4 | Command rate | Too many commands too fast |
+| 5 | Statistical baseline | Tank level deviates beyond learned normal range |
 
-## Hardening: attack timing variation + telemetry noise (8 September 2026)
+Layers 1-4 are deterministic rules. Layer 5 uses a median/MAD
+statistical profile trained only from benign (normal) scenarios.
 
-- Bounded telemetry noise on the observed layer: `telemetry_noise` plan kind
-  adds 3σ-clamped gaussian noise to observed `tank_level`/`flow_rate` only; the
-  true `PlantState` stays clean so invariants never trip on a sensor artifact.
-  New `benign_noise_01` (steady running, `normal`) gives the Layer-5 baseline a
-  realistic noisy benign envelope.
-- Attack timing variation: `attack_*_jitter_01` variants jitter the approach
-  phase durations (pre-attack silence for injection/replay/mistimed; cadence for
-  drift). Same command payloads and same invariant-violation set as the base
-  attacks; detection must lean on process context, not fixed clock offsets.
-  Registered in a separate `ATTACK_JITTER_SCENARIOS` registry so the existing
-  `ATTACK_SCENARIOS` exact-set assertion and eval id→reason mapping are unchanged.
-- Generator version bumped to `safeco-scenarios/1.3`.
-- Phase 5 close-out (16 September 2026): observed → `Event.process` mapping
-  confirmed and jitter variants counted in `ATTACK_EVALUATION_SCENARIOS`. A
-  Layer 5 retrain on the noisy envelope proved unnecessary — the clean-trained
-  robust ranges absorb the 3σ-clamped noise
-  (`test_evaluation_report_computes_recall_and_precision` passes at
-  precision/recall 1.0; `test_benign_noise_01_has_no_baseline_false_positive`
-  locks in the noisy true negative). Follow-up resolved.
-- Reproducible fingerprints (seed 42):
-  - `benign_noise_01` (normal): `9684fc7042c0eca1737e9bd9260629f5e07c99878380bcb077cf2541d354566f`
-  - `attack_injection_jitter_01` (injection): `8ed9586b5fa8bd55cee27105d41ee40120d4333ffe89feb25b3c7c5182110531`
-  - `attack_replay_jitter_01` (replay): `7cb8c6517bba85fa115d1bccff4c746b3352cdc0f9d888c9880aa8901d3c8ffc`
-  - `attack_mistimed_jitter_01` (mistimed): `0b5ba9d8fddb1ed8d6ade8ccd2efadb6578bdea6311b81b2ba2ba83e6c96a308`
-  - `attack_drift_jitter_01` (drift): `e02e9beb08777fe1ccaa247cf5fad610ec811199ceac8e5fcc0e36fb35934d3a`
-- Fingerprints re-recorded 16 September 2026 during Phase 5 close-out: the
-  payload gained `step_durations` after the 8 September recording
-  (`30a85c4`), so the values changed by design; scenario bodies are untouched.
-- Realism evidence reproduces via `check_process_realism("benign_noise_01")`
-  including the `bounded_noise` check.
+---
 
-## Final report outline
+## What SafeCO detects (attack types)
 
-1. Problem and threat model.
-2. Adupe simulator, normalized event contract, and local architecture.
-3. Hybrid detection rules and human-in-the-loop response.
-4. Synthetic-data generation and held-out evaluation.
-5. Demonstration results, limitations, and future work.
+| Attack | What happens | Expected alert |
+|--------|-------------|----------------|
+| Injection | Unsafe pump command injected | `unsafe_pump_start` |
+| Replay | Old command re-sent | `command_replay` |
+| Mistimed | Recovery command in wrong order | `recovery_out_of_sequence` |
+| Drift | Target level gradually moved toward limit | `setpoint_drift` |
+| Baseline | Process value outside learned normal range | `baseline_deviation` |
 
-## Accuracy guardrails
+---
 
-- Adupe is fictional and representative; no real plant or operational dataset is claimed.
-- Modbus validity is not process safety.
-- Hash-chain verification detects later stored-event modification, not false sensors.
-- Internet loss differs from loss of the local control feed.
-- Critical alerts escalate and recommend checks; an engineer chooses plant action.
-- Do not claim electricity support, autonomous shutdown, or unimplemented detector/API/UI work.
+## Scenario categories
+
+**Normal (no attack expected):**
+- `startup_01` — system boots up
+- `extended_normal_01` — ~969 seconds of normal operation
+- `benign_noise_01` — normal operation with sensor noise
+- `benign_spike_01` — brief tank-level blip, self-restoring
+- `benign_duty_jitter_01` — drain/fill timing varies ±15%
+- `benign_setpoint_nudge_01` — small target-level blip
+- `maintenance_01` — maintenance mode with authorised changes
+
+**Attack (alert expected):**
+- `attack_injection_01` / `attack_injection_jitter_01`
+- `attack_replay_01` / `attack_replay_jitter_01`
+- `attack_mistimed_01` / `attack_mistimed_jitter_01`
+- `attack_drift_01` / `attack_drift_jitter_01`
+- `attack_baseline_low_tank_01`
+- `attack_baseline_high_limit_01`
+- `attack_baseline_mode_context_01`
+
+The `_jitter_01` variants use the same attack commands but vary the
+timing. This proves detection relies on process context, not fixed
+clock offsets.
+
+---
+
+## Evaluation results
+
+The evaluator (`src/safeco/evaluation.py`) replays scenarios through
+the detector and reports precision, recall, and detection latency.
+
+**Key results (seed 42):**
+
+| Scenario | Events | Alerts | Expected alert |
+|----------|--------|--------|----------------|
+| `startup_01` | 3 | 0 | — |
+| `benign_noise_01` | 10 | 0 | — |
+| `attack_injection_01` | 1 | 1 | `unsafe_pump_start` |
+| `attack_baseline_high_limit_01` | 5 | 1 | `baseline_deviation` |
+
+Precision and recall are both 1.0 across the evaluated scenarios.
+The baseline-only anomaly scenarios (`attack_baseline_*`) produce
+alerts that rules alone would miss, demonstrating Layer 5's added
+coverage.
+
+**Important:** These are synthetic, scenario-based results. They
+demonstrate reproducibility and detector behaviour, not operational
+performance in a real plant.
+
+---
+
+## The operator dashboard
+
+A vanilla HTML/CSS/JS dashboard (no build step, no framework) served
+by the FastAPI backend at `/`.
+
+**What it shows:**
+- Plant state: mode, power, pump/valve states, target/limit levels
+- Animated SVG tank with flowing water waves, Target and Limit markers
+- Alerts: severity, evidence, confidence, recommendations, ack button
+- Events: filterable by scenario, paginated, with full event details
+- Scenarios: select, set seed, run, see results appear
+- System health: feed status, event count, hash chain integrity
+
+**How it updates:** 2-second HTTP polling (with SSE transport in progress
+via a parallel PR). Refreshes immediately after scenario runs,
+acknowledgement, filter changes, or manual button click.
+
+**What it does NOT do:**
+- Acknowledgement is record-only — it does not change plant state
+
+**Dashboard screenshots needed for report:**
+1. Plant state tab (showing tank with waves and markers)
+2. Alerts tab (showing an attack alert with evidence)
+3. Scenarios tab (showing scenario selector and run result)
+4. System health tab (showing feed status and hash chain)
+
+---
+
+## Known limitations
+
+- The dashboard runner builds events from the simulator's true state, not
+  observed telemetry snapshots. Benign anomaly scenarios (noise, spikes,
+  setpoint nudges) that perturb only the observed layer will not show the
+  perturbed values in the dashboard event history. The evaluation CLI
+  uses observed snapshots and may therefore differ.
+- Alert acknowledgement is record-only and never changes plant state.
+- The confirmed simulator-action concept is not implemented.
+- Results are based on deterministic synthetic scenarios, not real plant data.
+
+---
+
+## What is NOT implemented (do not claim these)
+
+- Autonomous shutdown or blocking of commands
+- Engineer-confirmed simulator action (documented but not built)
+- Real plant data or operational dataset
+- Real Modbus adapter to physical hardware
+- Electricity support or power-grid modelling
+
+---
+
+## Accuracy guardrails (read before writing the report)
+
+1. Adupe is fictional. Never imply it is a real facility.
+2. Modbus validity ≠ process safety. A valid Modbus write can still be unsafe.
+3. The hash chain detects stored-event tampering, not fake sensors.
+4. Internet loss ≠ loss of the local control feed. These are different.
+5. Critical alerts recommend checks; a human decides what to do.
+6. Baseline training uses ONLY benign tuning scenarios. Never imply
+   validation or held-out scenarios were used for training.
+7. All results are synthetic and scenario-based.
+
+---
+
+## Verification checklist (for the report)
+
+Run from repo root:
+
+```bash
+.venv/bin/ruff check src tests          # Lint
+.venv/bin/ruff format --check src tests # Format
+PYTHONPATH=src .venv/bin/python -m pytest -q  # Tests
+git diff --check                         # Whitespace
+```
+
+Current status: 277 tests passing, 28 third-party warnings
+(Starlette/FastAPI deprecations under Python 3.14, not failures).
+
+---
+
+## Report structure (4 pages max)
+
+1. **Problem & approach** — What SafeCO does, why it matters (1 paragraph)
+2. **Architecture** — Simulator → Collector → SQLite → Detector → Alerts
+3. **Detection** — 5 layers, baseline training, attack types
+4. **Evaluation** — Scenarios, results, dashboard screenshots, limitations
+
+Keep each section tight. Screenshots will take ~1 page. Text must fit
+in ~3 pages.

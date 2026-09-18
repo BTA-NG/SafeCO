@@ -19,14 +19,24 @@ observed and explained. It never blocks a command and never acts on the plant.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from safeco.alert_store import AlertStore
+from safeco.baseline import BaselineProfile
 from safeco.collector import EventCollector
 from safeco.detector import detect
+from safeco.evaluation import train_baseline_for_evaluation
 from safeco.events import Event
 from safeco.plant import PlantState
 from safeco.scenarios import GROUND_TRUTH, run_scenario, scenario_fingerprint
 from safeco.simulator import CommandRecord
 from safeco.storage import EventStore
+
+
+@lru_cache(maxsize=16)
+def _baseline_for_seed(seed: int) -> BaselineProfile:
+    """Return the deterministic benign-training profile for a scenario seed."""
+    return train_baseline_for_evaluation(seed=seed)
 
 
 def run_scenario_and_persist(
@@ -55,6 +65,7 @@ def run_scenario_and_persist(
     """
     ground_truth = GROUND_TRUTH.get(name, "normal")
     collector = EventCollector(event_store, name, seed=seed)
+    baseline_profile = _baseline_for_seed(seed)
     history: list[Event] = []
     alert_ids: set[str] = set()
 
@@ -72,7 +83,7 @@ def run_scenario_and_persist(
             ground_truth=ground_truth,
             raw={"address": command.address, "kind": command.kind},
         )
-        for alert in detect(event, history):
+        for alert in detect(event, history, baseline_profile=baseline_profile):
             alert_store.upsert(alert)
             alert_ids.add(alert.alert_id)
         history.append(event)

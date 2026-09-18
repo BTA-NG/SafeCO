@@ -4,13 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SafeCO — operator console</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <div class="app">
       <aside class="sidebar">
         <div class="brand">
-          <span class="product">SafeCO</span>
+          <div class="brand-lockup">
+            <svg viewBox="0 0 320 320" width="44" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+              <g transform="translate(0 86)">
+                <g transform="rotate(10 160 75)">
+                  <path d="M105,80 A55,45 0 0 1 215,80 L225,92 Q160,108 95,92 Z" fill="#F5A623" stroke="#0B111C" stroke-width="4" stroke-linejoin="round"/>
+                  <path d="M118,62 Q160,40 202,62" stroke="#FFD98E" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.85"/>
+                </g>
+              </g>
+            </svg>
+            <span class="product">Safe<span class="product-co">CO</span></span>
+          </div>
           <span class="brand-sub">advisory command monitor</span>
         </div>
         <nav class="nav" role="tablist">
@@ -40,14 +51,9 @@
       <div class="content">
         <header class="topbar">
           <div class="site">
-            <label class="site-label" for="site-name">Monitored site</label>
-            <input
-              id="site-name"
-              class="site-name"
-              type="text"
-              aria-label="Monitored site name (editable)"
-              maxlength="80"
-            />
+            <span class="site-label">Monitored site</span>
+            <span id="site-name" class="site-name">Adupe Municipal Water Station</span>
+            <span class="site-context">Fictional demo facility</span>
           </div>
           <div class="live">
             <span class="live-dot" id="live-dot" aria-hidden="true"></span>
@@ -70,17 +76,78 @@
                 <div class="stat"><span class="stat-key">Inlet valve</span><span class="stat-val" data-field="inlet_valve_state"><span class="pill">—</span></span></div>
                 <div class="stat"><span class="stat-key">Outlet valve</span><span class="stat-val" data-field="outlet_valve_state"><span class="pill">—</span></span></div>
                 <div class="stat"><span class="stat-key">Target level</span><span class="stat-val" data-field="target_level">—</span></div>
+                <div class="stat"><span class="stat-key">High-level limit</span><span class="stat-val" data-field="high_level_limit">—</span></div>
               </div>
-              <div class="level">
-                <div class="level-head">
-                  <span>Tank level</span>
-                  <span class="level-value" data-field="tank_level">—</span>
+              <div class="tank-section">
+                <div class="tank-label">Tank level</div>
+                <div class="tank-layout">
+                  <div class="tank-markers" data-field="tank_markers"></div>
+                  <div class="tank-visual">
+                    <svg viewBox="0 0 180 320" xmlns="http://www.w3.org/2000/svg" class="tank-svg">
+                      <defs>
+                        <clipPath id="tankClip">
+                          <rect x="0" y="0" width="180" height="320" rx="18" ry="18"/>
+                        </clipPath>
+                        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="#b8ddf5"/>
+                          <stop offset="100%" stop-color="#5a9ad4"/>
+                        </linearGradient>
+                      </defs>
+                      <rect x="1" y="1" width="178" height="318" rx="17" ry="17"
+                            fill="#e8eef5" stroke="#9aa8b8" stroke-width="2"/>
+                      <g clip-path="url(#tankClip)">
+                        <!-- Water body -->
+                        <rect data-field="tank_water" x="0" y="320" width="180" height="320"
+                              fill="url(#waterGrad)" opacity="0.92"/>
+                        <!-- Waves: outer <g> positioned by JS (y attr), inner <g>
+                             carries CSS translateX animation. No conflict. -->
+                        <g data-field="tank_wave_back">
+                          <g class="wave-anim wave-back">
+                            <path d="M0,0 Q30,3 60,0 Q90,-3 120,0 Q150,3 180,0 Q210,-3 240,0 Q270,3 300,0 L300,8 L0,8 Z" fill="#8fbde0" opacity="0.45"/>
+                          </g>
+                        </g>
+                        <g data-field="tank_wave_mid">
+                          <g class="wave-anim wave-mid">
+                            <path d="M0,0 Q25,2.5 50,0 Q75,-2.5 100,0 Q125,2.5 150,0 Q175,-2.5 200,0 Q225,2.5 250,0 Q275,-2.5 300,0 L300,6 L0,6 Z" fill="#7aabda" opacity="0.6"/>
+                          </g>
+                        </g>
+                        <g data-field="tank_wave_front">
+                          <g class="wave-anim wave-front">
+                            <path d="M0,0 Q20,2 40,0 Q60,-2 80,0 Q100,2 120,0 Q140,-2 160,0 Q180,2 200,0 Q220,-2 240,0 Q260,2 280,0 Q300,-2 320,0 L320,5 L0,5 Z" fill="#6898cc" opacity="0.8"/>
+                          </g>
+                        </g>
+                      </g>
+                      <!-- Scale labels inside SVG so they never overlap the status card -->
+                      <text x="172" y="12" text-anchor="end" fill="#5b6b7b"
+                            font-size="11" font-weight="600"
+                            font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">100%</text>
+                      <text x="172" y="316" text-anchor="end" fill="#5b6b7b"
+                            font-size="11" font-weight="600"
+                            font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">0%</text>
+                      <text data-field="tank_pct" x="90" y="160" text-anchor="middle"
+                            dominant-baseline="central" fill="#17212b" font-size="42"
+                            font-weight="700" font-variant-numeric="tabular-nums">—</text>
+                      <text x="90" y="190" text-anchor="middle" fill="#5b6b7b"
+                            font-size="13"
+                            font-family="-apple-system, 'Segoe UI', Roboto, sans-serif">last observed value</text>
+                    </svg>
+                  </div>
+                  <div class="tank-status">
+                    <div class="tank-status-head">CURRENT STATUS</div>
+                    <div class="tank-status-row">
+                      <span class="tank-status-dot" data-field="tank_status_dot"></span>
+                      <span class="tank-status-val" data-field="tank_status">—</span>
+                    </div>
+                    <div class="tank-status-detail">
+                      <span class="tank-status-key">Target</span>
+                      <span class="tank-status-val" data-field="tank_target_display">—</span>
+                    </div>
+                    <div class="tank-status-detail">
+                      <span class="tank-status-key">Updated</span>
+                      <span class="tank-status-val" data-field="tank_updated">—</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="level-track">
-                  <div class="level-fill" data-field="tank_level_bar"></div>
-                  <div class="level-limit" data-field="high_level_limit_mark" title="High-level limit"></div>
-                </div>
-                <div class="level-scale"><span>0%</span><span>100%</span></div>
               </div>
             </div>
           </section>
@@ -129,8 +196,10 @@
             <div class="panel-head">
               <h2>Recent events</h2>
               <label class="inline">
-                Scenario
-                <input id="event-scenario-filter" type="text" placeholder="all scenarios" />
+                Filter by scenario
+                <select id="event-scenario-filter">
+                  <option value="">All scenarios</option>
+                </select>
               </label>
             </div>
             <p class="muted" data-empty>No events recorded yet.</p>
@@ -206,9 +275,8 @@
         <footer>
           <p class="muted">
             SafeCO is a local-first advisory monitor for industrial/utility control
-            systems. The monitored site name is a local display label. The hash
-            chain detects later modification of stored events, not whether a sensor
-            reading was truthful.
+            systems. The hash chain detects later modification of stored events,
+            not whether a sensor reading was truthful.
           </p>
         </footer>
       </div>
