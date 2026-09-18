@@ -1,20 +1,21 @@
 // SafeCO operator console client.
 //
-// Polls the local API and renders plant state, alerts, events, scenario
-// controls, and system health across sidebar-navigated views. SafeCO is
-// advisory: this page only reads state and records acknowledgement. It never
-// issues or blocks a control command.
+// Renders plant state, alerts, events, scenario controls, and system health
+// across sidebar-navigated views, from a live update stream the API pushes to.
+// SafeCO is advisory: this page only reads state and records acknowledgement.
+// It never issues or blocks a control command.
 //
-// Offline story: if the local control feed cannot be reached, the page keeps the
-// last-known values on screen and shows a degraded-visibility banner rather than
-// blanking out or implying the plant is fine.
+// Offline story: if the stream cannot be reached, the page keeps the last-known
+// values on screen and shows a degraded-visibility banner rather than blanking
+// out or implying the plant is fine.
 
 "use strict";
 
-// Poll cadence in milliseconds. The console re-fetches the feed this often, and
-// also refreshes immediately after an operator action (acknowledge, run,
-// filter, manual refresh) so those changes are not gated by the interval.
-const POLL_MS = 2000;
+// The server pushes a full payload on connect and another whenever stored state
+// changes, so nothing here runs on a poll timer. EventSource reconnects on its
+// own, using the interval the stream sends; a manual refresh stays available for
+// an operator who wants to re-read the feed on the spot.
+const STREAM_URL = "/api/stream";
 
 const SITE_NAME_KEY = "safeco.siteName";
 const DEFAULT_SITE_NAME = "Adupe Municipal Water Station";
@@ -249,6 +250,20 @@ function formatValue(value) {
   return String(value);
 }
 
+/**
+ * Narrow the event rows to the scenario filter.
+ *
+ * The stream carries one unfiltered window, so the filter is applied where the
+ * rows are rendered — the same way the alert queue is filtered — rather than
+ * re-querying the API on every keystroke. Matching is a case-insensitive
+ * substring, so rows appear while a scenario id is still being typed.
+ */
+function filterEvents(rows) {
+  const q = state.eventScenario.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((ev) => String(ev.scenario_id ?? "").toLowerCase().includes(q));
+}
+
 function renderEvents(rows) {
   const panel = document.getElementById("events");
   const empty = panel.querySelector("[data-empty]");
@@ -256,16 +271,19 @@ function renderEvents(rows) {
   const body = wrap.querySelector("tbody");
   body.textContent = "";
 
-  const all = rows || [];
-  if (all.length === 0) {
+  const matched = filterEvents(rows || []);
+  if (matched.length === 0) {
     empty.hidden = false;
+    empty.textContent = state.eventScenario
+      ? "No events match this scenario filter."
+      : "No events recorded yet.";
     wrap.hidden = true;
-    paginate("events", all);
+    paginate("events", matched);
     return;
   }
   empty.hidden = true;
   wrap.hidden = false;
-  const shown = paginate("events", all);
+  const shown = paginate("events", matched);
   for (const ev of shown) {
     const tr = document.createElement("tr");
     const time = document.createElement("td");
@@ -554,56 +572,99 @@ async function runScenario(event) {
 function setupEventFilter() {
   const input = document.getElementById("event-scenario-filter");
   input.addEventListener("input", () => {
-    state.eventScenario = input.value.trim();
+    state.eventScenario = input.value;
     paging.events.page = 1;
-    refresh();
+    rerenderEvents();
   });
 }
 
-function eventsUrl() {
-  return state.eventScenario
-    ? `/api/events?limit=${LIST_LIMIT}&scenario_id=${encodeURIComponent(state.eventScenario)}`
-    : API.events;
+/* ---------- Live update stream ---------- */
+
+/**
+ * Render one payload from the stream, or from a manual refresh.
+ *
+ * The snapshot sent on connect and every update sent afterwards share this
+ * path, so the first screen and a pushed change cannot drift apart.
+ */
+function applySnapshot(payload) {
+  state.lastGood = payload;
+  state.lastUpdated = Date.now();
+
+  const health = payload.health;
+  if (health.degraded_visibility) {
+    const detail = health.event_count
+      ? "no fresh events — the local feed may be down. Showing last-known values."
+      : "no events recorded yet. Run a scenario or start the feed.";
+    setBanner("degraded", `Degraded visibility — ${detail}`);
+    setLive("degraded", "feed degraded");
+  } else {
+    setBanner("ok", `Local feed healthy. Last event ${health.last_event_timestamp}.`);
+    setLive("ok", "feed healthy · just now");
+  }
+  renderPlant(payload.plant);
+  renderEvents(payload.events);
+  renderAlerts(payload.alerts);
+  updateAlertBadge(payload.alerts);
+  renderHealth(health);
 }
 
-/* ---------- Poll loop ---------- */
+/** Repaint every view from the last payload that arrived intact. */
+function rerenderLastGood() {
+  if (!state.lastGood) return;
+  renderPlant(state.lastGood.plant);
+  renderEvents(state.lastGood.events);
+  renderAlerts(state.lastGood.alerts);
+  updateAlertBadge(state.lastGood.alerts);
+  renderHealth(state.lastGood.health);
+}
 
+/**
+ * Open the live update stream.
+ *
+ * This connection replaces the poll timer: the server pushes a fresh payload
+ * the moment stored state changes, so a new finding appears as it lands rather
+ * than up to one interval later. EventSource reconnects by itself using the
+ * interval the stream sends, so a dropped feed recovers without a page reload —
+ * but until a frame arrives the console is no longer being told what the plant
+ * is doing, so it says so and holds the last-known values.
+ */
+function connectStream() {
+  const source = new EventSource(STREAM_URL);
+  const receive = (message) => {
+    try {
+      applySnapshot(JSON.parse(message.data));
+    } catch (err) {
+      markDegradedBanner(`unreadable ${message.type} payload`);
+    }
+  };
+  source.addEventListener("snapshot", receive);
+  source.addEventListener("update", receive);
+  source.onerror = () => {
+    setLive("degraded", "feed unreachable");
+    markDegradedBanner("the live update stream is down");
+  };
+}
+
+/* ---------- Manual refresh ---------- */
+
+/**
+ * Re-read the feed on demand, for the Refresh button and for an action whose
+ * result the operator is waiting on — a click that changed stored state should
+ * not look ignored until the next push arrives.
+ */
 async function refresh() {
   try {
     const [health, plant, events, alerts] = await Promise.all([
       getJSON(API.health),
       getJSON(API.plant),
-      getJSON(eventsUrl()),
+      getJSON(API.events),
       getJSON(API.alerts),
     ]);
-    state.lastGood = { health, plant, events, alerts };
-    state.lastUpdated = Date.now();
-
-    if (health.degraded_visibility) {
-      const detail = health.event_count
-        ? "no fresh events — the local feed may be down. Showing last-known values."
-        : "no events recorded yet. Run a scenario or start the feed.";
-      setBanner("degraded", `Degraded visibility — ${detail}`);
-      setLive("degraded", "feed degraded");
-    } else {
-      setBanner("ok", `Local feed healthy. Last event ${health.last_event_timestamp}.`);
-      setLive("ok", "feed healthy · just now");
-    }
-    renderPlant(plant);
-    renderEvents(events);
-    renderAlerts(alerts);
-    updateAlertBadge(alerts);
-    renderHealth(health);
+    applySnapshot({ health, plant, events, alerts });
   } catch (err) {
     setLive("degraded", "feed unreachable");
     markDegradedBanner(err.message);
-    if (state.lastGood) {
-      renderPlant(state.lastGood.plant);
-      renderEvents(state.lastGood.events);
-      renderAlerts(state.lastGood.alerts);
-      updateAlertBadge(state.lastGood.alerts);
-      renderHealth(state.lastGood.health);
-    }
+    rerenderLastGood();
   }
 }
 
@@ -634,8 +695,7 @@ function start() {
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
   document.getElementById("refresh-btn").addEventListener("click", refresh);
   loadScenarios();
-  refresh();
-  setInterval(refresh, POLL_MS);
+  connectStream();
   setInterval(tickLiveClock, 1000);
 }
 
