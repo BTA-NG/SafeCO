@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from safeco.alert_store import AlertStore
+from safeco.api.bus import ChangeBus
 from safeco.storage import EventStore
 
 
@@ -58,5 +59,28 @@ def get_alert_store() -> AlertStore:
     return store
 
 
+def get_bus() -> ChangeBus:
+    """Return the process-wide change bus for API request handlers.
+
+    Routes that mutate stored state publish on this bus so the live update
+    stream can push a fresh payload without polling. It is created on first use
+    and kept on ``app.state``, so a route always publishes on the same bus that
+    every open stream is listening to. The bus holds no resources to release,
+    so it needs no lifespan teardown.
+
+    Returns:
+        The shared ``ChangeBus`` for this process.
+
+    """
+    from safeco.app import app
+
+    bus = getattr(app.state, "bus", None)
+    if bus is None:
+        bus = ChangeBus()
+        app.state.bus = bus
+    return bus
+
+
 StoreDep = Annotated[EventStore, Depends(get_store)]
 AlertStoreDep = Annotated[AlertStore, Depends(get_alert_store)]
+BusDep = Annotated[ChangeBus, Depends(get_bus)]

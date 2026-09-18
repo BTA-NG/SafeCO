@@ -55,13 +55,36 @@ the advisory finding; it never changes the plant.
 Running a scenario drives the simulator so its consequences can be observed and
 explained. It never blocks a command or acts on a real plant.
 
+### Live updates
+
+- `GET /api/stream` — Server-Sent Events stream of the console's payload: a
+  `snapshot` on connect, then an `update` whenever stored state changes
+
+The stream carries the same `health`, `plant`, `events`, and `alerts` payloads the
+REST endpoints return, composed by calling those handlers rather than re-deriving
+them, so the two cannot drift into different versions of the same truth. Frames
+are named (`event: snapshot`, `event: update`) and the connection stays open until
+the client goes away. `: keepalive` comments are sent while nothing is happening,
+so an intermediary does not drop a quiet connection and present as a lost feed.
+
+Changes made through the API announce themselves on an in-process change bus, so a
+scenario run or an acknowledgement reaches every open console immediately instead
+of waiting out a poll interval. The bus only sees writes made by this process, so
+the stream also re-checks a cheap fingerprint — event count, newest event id, and
+alert counts — every couple of seconds to catch writes from outside it, such as a
+collection feed running as its own process. A dropped stream is the client's
+signal that SafeCO itself is unreachable, which no server-side payload can report
+on its own behalf.
+
 ## Dashboard
 
 A local operator console is served at `/`, with assets under `/static` (vanilla
 HTML/CSS/JS — no build step). A fixed sidebar navigates five views over a live
-feed-status indicator and a persistent health banner. It polls `/api/health`,
-`/api/plant/state`, `/api/events`, and `/api/alerts` every 2 seconds and also
-refreshes immediately after any operator action.
+feed-status indicator and a persistent health banner. It renders from
+`/api/stream`: the server pushes a full payload on connect and another whenever
+stored state changes, so a new finding appears as it lands rather than up to one
+poll interval later. The Refresh button, and actions whose result the operator is
+waiting on, re-read the REST endpoints directly.
 
 - **Plant state**: operating mode, power source, pump and valve status pills, and
   a tank-level bar with the high-level-limit marker.
@@ -69,7 +92,8 @@ refreshes immediately after any operator action.
   / acknowledged filters; search by alert ID; and per-alert severity, the alert ID
   with a copy button, explanation, evidence, a confidence meter, and recommended
   action, with a record-only acknowledge button.
-- **Events**: the recent event feed with a scenario filter and ground-truth labels.
+- **Events**: the recent event feed with a scenario filter (applied in the browser
+  over the pushed window) and ground-truth labels.
 - **System health**: feed status, visibility, database availability, total events
   collected, and the last event timestamp.
 

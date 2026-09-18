@@ -29,10 +29,14 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SAFECO_ALERT_DATABASE", str(tmp_path / "safeco_alerts_test.db"))
     app.state.store = None
     app.state.alert_store = None
+    # Drop any change bus from a previous test, so a stream that failed to
+    # unsubscribe cannot be woken by this test's routes.
+    app.state.bus = None
     with TestClient(app) as test_client:
         yield test_client
     app.state.store = None
     app.state.alert_store = None
+    app.state.bus = None
 
 
 @pytest.fixture()
