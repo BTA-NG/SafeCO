@@ -1,20 +1,15 @@
-<h1 align="center">SafeCO</h1>
+<table><tr><td align="center"><img src="docs/safeco-logo.png" alt="SafeCO" width="480"></td></tr></table>
 
 <p align="center">
-  <img src="docs/safeco-logo.png" alt="SafeCO Logo" width="320" />
+  <a href="#"><img src="https://img.shields.io/badge/hackathon-ICSC%202026-f5a623.svg" alt="ICSC 2026"></a>
+  <a href="#"><img src="https://img.shields.io/badge/python-3.11%2B-3776ab.svg" alt="Python 3.11+"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Modbus-TCP-lightgrey.svg" alt="Modbus TCP"></a>
+  <a href="#"><img src="https://img.shields.io/badge/SQLite-storage-lightgrey.svg" alt="SQLite"></a>
+  <a href="#"><img src="https://img.shields.io/badge/FastAPI-backend-009688.svg" alt="FastAPI"></a>
+  <img src="https://img.shields.io/badge/tests-277%20passing-2ea043.svg" alt="277 tests">
 </p>
 
-<p align="center">
-  <em>Advisory Cybersecurity Monitor for Industrial Control Systems</em>
-</p>
-
-<p align="center">
-  <code>hackathon</code> <code>ICSC 2026</code> <code>Python 3.11+</code> <code>Modbus TCP</code> <code>SQLite</code> <code>FastAPI</code> <code>277 tests</code>
-</p>
-
-<p align="center">
-  <em>Detect → Explain → Recommend → Human Decides</em>
-</p>
+<p align="center"><strong>Detect → Explain → Recommend → Human Decides</strong></p>
 
 ---
 
