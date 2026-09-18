@@ -23,6 +23,9 @@ def test_scenario_list_includes_all_scenarios(client) -> None:
     for scenario_id in ATTACK_SCENARIOS:
         assert scenario_id in scenarios
 
+    for scenario_id in ATTACK_JITTER_SCENARIOS:
+        assert scenario_id in scenarios
+
 
 def test_scenario_list_sorted_and_complete(client) -> None:
     """The scenario list should be sorted and match the full registry."""
@@ -30,7 +33,11 @@ def test_scenario_list_sorted_and_complete(client) -> None:
     assert response.status_code == 200
     scenarios = response.json()
 
-    all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
+    all_scenarios = {
+        **NORMAL_SCENARIOS,
+        **ATTACK_SCENARIOS,
+        **ATTACK_JITTER_SCENARIOS,
+    }
     assert scenarios == sorted(all_scenarios.keys())
 
 
@@ -71,13 +78,13 @@ def test_scenario_detail_validates_jitter_variants(client) -> None:
     ``POST /scenarios/{id}/run`` drives the canonical runner, which accepts the
     timing-jitter variants. The detail route validates an id before a run, so it
     must accept exactly what the runner accepts; otherwise the API 404s an id it
-    would happily run. (The curated ``GET /scenarios`` list is a separate,
-    deliberately narrower question and still omits these variants.)
+    would happily run.
     """
     scenario_id = list(ATTACK_JITTER_SCENARIOS.keys())[0]
 
     response = client.get(f"/api/scenarios/{scenario_id}")
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["scenario_id"] == scenario_id
-    assert payload["status"] == "registered"
+    assert response.json() == {
+        "scenario_id": scenario_id,
+        "status": "registered",
+    }

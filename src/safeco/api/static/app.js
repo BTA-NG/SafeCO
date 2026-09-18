@@ -16,7 +16,6 @@
 // filter, manual refresh) so those changes are not gated by the interval.
 const POLL_MS = 2000;
 
-const SITE_NAME_KEY = "safeco.siteName";
 const DEFAULT_SITE_NAME = "Adupe Municipal Water Station";
 
 // Fetch a generous window so the operator can page through recent history
@@ -135,20 +134,12 @@ function setupTabs() {
   activateTab("plant");
 }
 
-/* ---------- Editable site name (persisted locally) ---------- */
+/* ---------- Fixed demo-site identity ---------- */
 
 function setupSiteName() {
-  const input = document.getElementById("site-name");
-  input.value = localStorage.getItem(SITE_NAME_KEY) || DEFAULT_SITE_NAME;
-  const persist = () => {
-    const name = input.value.trim() || DEFAULT_SITE_NAME;
-    input.value = name;
-    localStorage.setItem(SITE_NAME_KEY, name);
-    document.title = `SafeCO — ${name}`;
-  };
-  input.addEventListener("change", persist);
-  input.addEventListener("blur", persist);
-  document.title = `SafeCO — ${input.value}`;
+  const site = document.getElementById("site-name");
+  site.textContent = DEFAULT_SITE_NAME;
+  document.title = `SafeCO — ${DEFAULT_SITE_NAME}`;
 }
 
 /* ---------- Live status ---------- */
@@ -219,25 +210,94 @@ function renderPlant(payload) {
   setPill(body, "pump_state", p.pump_state);
   setPill(body, "inlet_valve_state", p.inlet_valve_state);
   setPill(body, "outlet_valve_state", p.outlet_valve_state);
-  body.querySelector('[data-field="target_level"]').textContent = fmtPercent(
-    p.target_level
-  );
+  const targetEl = body.querySelector('[data-field="target_level"]');
+  if (targetEl) targetEl.textContent = fmtPercent(p.target_level);
+  const limitEl = body.querySelector('[data-field="high_level_limit"]');
+  if (limitEl) limitEl.textContent = fmtPercent(p.high_level_limit);
 
-  body.querySelector('[data-field="tank_level"]').textContent = fmtPercent(
-    p.tank_level
-  );
+  const tankLabelEl = body.querySelector('[data-field="tank_level"]');
+  if (tankLabelEl) tankLabelEl.textContent = fmtPercent(p.tank_level);
   const level = Math.max(0, Math.min(100, Number(p.tank_level) || 0));
-  const fill = body.querySelector('[data-field="tank_level_bar"]');
-  fill.style.width = `${level}%`;
+  const svg = body.querySelector(".tank-svg");
+  const waterRect = body.querySelector('[data-field="tank_water"]');
+  const waveBack = body.querySelector('[data-field="tank_wave_back"]');
+  const waveMid = body.querySelector('[data-field="tank_wave_mid"]');
+  const waveFront = body.querySelector('[data-field="tank_wave_front"]');
+  const pctText = body.querySelector('[data-field="tank_pct"]');
+
+  if (waterRect && pctText) {
+    // Water fill: top of water = 320 - (level/100 * 320)
+    const waterTop = 320 - (level / 100) * 320;
+    const waterH = 320 - waterTop;
+    waterRect.setAttribute("y", waterTop);
+    waterRect.setAttribute("height", waterH);
+    // Position wave groups at the water surface via transform (y attr
+    // is not valid on <g>; CSS animation on the inner <g> is separate).
+    const waveY = `translate(0, ${waterTop})`;
+    if (waveBack) waveBack.setAttribute("transform", waveY);
+    if (waveMid) waveMid.setAttribute("transform", waveY);
+    if (waveFront) waveFront.setAttribute("transform", waveY);
+    pctText.textContent = `${level.toFixed(1)}%`;
+    // Position pct text: above water if enough room, otherwise centered
+    const textY = level > 12 ? waterTop - 18 : 160;
+    pctText.setAttribute("y", Math.max(30, textY));
+  }
+
+  // Animate waves when feed is live
+  const liveDot = document.getElementById("live-dot");
+  if (svg && liveDot) {
+    const shouldAnimate = liveDot.classList.contains("ok");
+    svg.classList.toggle("animate", shouldAnimate);
+  }
+
+  // Status card — matches the detector: only fires when mode is running
+  // AND level exceeds the limit. Otherwise Normal.
   const limit = p.high_level_limit;
-  const over = limit !== null && limit !== undefined && level >= Number(limit);
-  fill.className = `level-fill${over ? " high" : ""}`;
-  const mark = body.querySelector('[data-field="high_level_limit_mark"]');
-  if (limit === null || limit === undefined) {
-    mark.hidden = true;
-  } else {
-    mark.hidden = false;
-    mark.style.left = `${Math.max(0, Math.min(100, Number(limit)))}%`;
+  const target = p.target_level;
+  const isRunning = p.mode === "running";
+  const over = isRunning && limit !== null && limit !== undefined
+    && level > Number(limit);
+  const statusDot = body.querySelector('[data-field="tank_status_dot"]');
+  const statusText = body.querySelector('[data-field="tank_status"]');
+  const targetDisp = body.querySelector('[data-field="tank_target_display"]');
+  const updatedDisp = body.querySelector('[data-field="tank_updated"]');
+  if (statusDot && statusText) {
+    if (over) {
+      statusDot.className = "tank-status-dot crit";
+      statusText.textContent = "Critical";
+    } else {
+      statusDot.className = "tank-status-dot ok";
+      statusText.textContent = "Normal";
+    }
+  }
+  if (targetDisp) {
+    targetDisp.textContent = target !== null && target !== undefined
+      ? fmtPercent(target)
+      : "—";
+  }
+  if (updatedDisp) {
+    const ts = payload.timestamp || "";
+    updatedDisp.textContent = ts ? ts.split("T")[1]?.split("+")[0] || ts : "—";
+  }
+
+  // Side markers — only real plant thresholds, no fabricated values.
+  // Positioned at their actual percentage height (bottom: {pct}%).
+  const markers = body.querySelector('[data-field="tank_markers"]');
+  if (markers) {
+    const markerDefs = [];
+    if (target !== null && target !== undefined) {
+      markerDefs.push({ label: "Target", pct: Number(target), color: "var(--accent)" });
+    }
+    if (limit !== null && limit !== undefined) {
+      markerDefs.push({ label: "Limit", pct: Number(limit), color: "var(--crit)" });
+    }
+    markerDefs.sort((a, b) => a.pct - b.pct);
+    markers.innerHTML = markerDefs
+      .map(
+        (m) =>
+          `<div class="tank-marker" style="bottom: ${m.pct}%"><span>${m.label} ${m.pct.toFixed(0)}%</span><span class="tank-marker-line" style="background:${m.color}"></span></div>`
+      )
+      .join("");
   }
 }
 
@@ -510,14 +570,25 @@ function renderHealth(health) {
 
 async function loadScenarios() {
   const select = document.getElementById("scenario-select");
+  const eventFilter = document.getElementById("event-scenario-filter");
   try {
     const ids = await getJSON(API.scenarios);
     select.textContent = "";
+    eventFilter.textContent = "";
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All scenarios";
+    eventFilter.appendChild(allOption);
     for (const id of ids) {
       const option = document.createElement("option");
       option.value = id;
       option.textContent = id;
       select.appendChild(option);
+
+      const filterOption = document.createElement("option");
+      filterOption.value = id;
+      filterOption.textContent = id;
+      eventFilter.appendChild(filterOption);
     }
   } catch (err) {
     /* Non-fatal: scenario controls stay empty if discovery fails. */
@@ -552,9 +623,9 @@ async function runScenario(event) {
 /* ---------- Event scenario filter ---------- */
 
 function setupEventFilter() {
-  const input = document.getElementById("event-scenario-filter");
-  input.addEventListener("input", () => {
-    state.eventScenario = input.value.trim();
+  const select = document.getElementById("event-scenario-filter");
+  select.addEventListener("change", () => {
+    state.eventScenario = select.value;
     paging.events.page = 1;
     refresh();
   });
@@ -568,7 +639,12 @@ function eventsUrl() {
 
 /* ---------- Poll loop ---------- */
 
-async function refresh() {
+async function refresh(manual = false) {
+  const btn = document.getElementById("refresh-btn");
+  if (manual && btn) {
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+  }
   try {
     const [health, plant, events, alerts] = await Promise.all([
       getJSON(API.health),
@@ -604,6 +680,11 @@ async function refresh() {
       updateAlertBadge(state.lastGood.alerts);
       renderHealth(state.lastGood.health);
     }
+  } finally {
+    if (manual && btn) {
+      btn.disabled = false;
+      btn.textContent = "Refresh";
+    }
   }
 }
 
@@ -632,7 +713,7 @@ function start() {
   setupPager("alerts", rerenderAlerts);
   setupPager("events", rerenderEvents);
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
-  document.getElementById("refresh-btn").addEventListener("click", refresh);
+  document.getElementById("refresh-btn").addEventListener("click", () => refresh(true));
   loadScenarios();
   refresh();
   setInterval(refresh, POLL_MS);

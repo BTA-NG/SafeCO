@@ -12,30 +12,24 @@ from fastapi import APIRouter, HTTPException, Query
 
 from safeco.api.deps import AlertStoreDep, StoreDep
 from safeco.api.scenario_runner import run_scenario_and_persist
-from safeco.scenarios import (
-    ATTACK_SCENARIOS,
-    NORMAL_SCENARIOS,
-    runnable_scenarios,
-)
+from safeco.scenarios import runnable_scenarios
 
 router = APIRouter(tags=["scenarios"])
 
 
 @router.get("/scenarios")
 async def list_scenarios() -> list[str]:
-    """List the scenarios the dashboard picker offers.
+    """List every scenario the dashboard picker offers.
 
-    This is a deliberately curated view — the benign and attack registries only.
-    The timing-jitter variants are runnable by id (see ``runnable_scenarios``)
-    but stay out of the picker until they are opted in, so this list is
-    intentionally narrower than the set the run/validate routes accept.
+    Resolved against ``runnable_scenarios`` — the same set the run and detail
+    routes accept — so the picker can never offer an id the run route would
+    refuse, nor hide one it would accept.
 
     Returns:
         A sorted list of scenario id strings.
 
     """
-    all_scenarios = {**NORMAL_SCENARIOS, **ATTACK_SCENARIOS}
-    return sorted(all_scenarios.keys())
+    return sorted(runnable_scenarios())
 
 
 @router.get("/scenarios/{scenario_id}")
@@ -46,7 +40,7 @@ async def get_scenario(scenario_id: str) -> dict[str, str]:
     POST so a read of this route never changes state. The id is checked against
     the full runnable set (``runnable_scenarios``) — the same set the run route
     uses — so this never 404s an id that ``POST /scenarios/{id}/run`` would
-    accept, including the timing-jitter variants the picker list omits.
+    accept.
 
     Args:
         scenario_id: The registry key to look up.
