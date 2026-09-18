@@ -1,4 +1,6 @@
-<table><tr><td align="center"><img src="docs/safeco-logo.png" alt="SafeCO" width="480"></td></tr></table>
+<p align="center">
+  <img src="docs/safeco-logo.png" alt="SafeCO" width="480">
+</p>
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/hackathon-ICSC%202026-f5a623.svg" alt="ICSC 2026"></a>
