@@ -316,10 +316,12 @@ def runnable_scenarios() -> dict[str, Callable[[], list[Step]]]:
     ``main``, and the API's scenario-detail validation all resolve ids against
     this set so a run and the validation that precedes it can never disagree.
 
-    It is deliberately *wider* than the curated ``GET /scenarios`` picker list
-    (normal + attack only): the jitter variants stay out of the picker and the
-    evaluation exact-set until they are opted in, but they remain directly
-    runnable by id, so the id validator must recognise them.
+    It is deliberately *wider* than the curated ``GET /scenarios`` picker list,
+    which offers the benign and attack registries only. The timing-jitter
+    variants are held out of that picker, but they are first-class everywhere
+    else: they belong to ``ATTACK_EVALUATION_SCENARIOS`` and each one has an
+    entry in ``EXPECTED_ATTACK_ALERTS``, so the id validator must recognise ids
+    the picker never offers.
 
     Returns:
         A merged ``{id: step-factory}`` dict spanning the normal, attack, and
