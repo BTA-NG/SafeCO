@@ -34,7 +34,7 @@ router = APIRouter(tags=["health"])
 # How long the newest event may age before visibility is considered degraded.
 # A live plant feed streams continuously, so a gap this long means SafeCO has
 # lost its live view rather than simply being idle between commands.
-STALE_AFTER_SECONDS = 120.0
+STALE_AFTER_SECONDS = 600.0
 
 
 def _feed_is_stale(last_timestamp: str, now: datetime) -> bool:
