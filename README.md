@@ -1,13 +1,19 @@
-# SafeCO
+<h1 align="center">SafeCO</h1>
 
 <p align="center">
-  <img src="docs/safeco-logo.png" alt="SafeCO Logo" width="120" />
+  <img src="docs/safeco-logo.png" alt="SafeCO Logo" width="320" />
 </p>
 
-<h3 align="center">Advisory Cybersecurity Monitor for Industrial Control Systems</h3>
+<p align="center">
+  <em>Advisory Cybersecurity Monitor for Industrial Control Systems</em>
+</p>
 
 <p align="center">
-  Detect → Explain → Recommend → Human Decides
+  <code>hackathon</code> <code>ICSC 2026</code> <code>Python 3.11+</code> <code>Modbus TCP</code> <code>SQLite</code> <code>FastAPI</code> <code>277 tests</code>
+</p>
+
+<p align="center">
+  <em>Detect → Explain → Recommend → Human Decides</em>
 </p>
 
 ---
