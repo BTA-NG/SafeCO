@@ -10,7 +10,7 @@ For ICSC 2026, build SafeCO, an explainable prototype that helps an engineer cat
 - Submission closes 21 September 2026 at 11:59 PM.
 - Submit a working demo, technical write-up of at most four pages, and code link.
 - No real personal data, real plant access, special hardware, or paid tools.
-- Show normal operation, startup/shutdown, legitimate maintenance, four reproducible attacks, detector results, explanations, and offline behaviour.
+- Show normal operation, startup/shutdown, legitimate maintenance, attack scenarios (injection, replay, mistimed, drift, baseline), detector results, explanations, and offline behaviour.
 - The system advises a human; it must not shut the process down automatically.
 
 ## Product statement
@@ -72,6 +72,6 @@ Read this file and architecture.md before changing direction. Preserve the produ
 
 ## Open questions
 
-- Detector thresholds after baseline experiments.
-- Server-rendered HTML or a small React client.
-- Screenshots and metric tables for the four-page report.
+- ~~Detector thresholds after baseline experiments.~~ Resolved: baseline uses robust median/MAD.
+- ~~Server-rendered HTML or a small React client.~~ Resolved: vanilla HTML/CSS/JS, no build step.
+- ~~Screenshots and metric tables for the four-page report.~~ Pending: dashboard screenshots and PDF generation.

@@ -30,7 +30,7 @@ Python model with tank level, inlet pump, inlet and outlet valves, flow, power s
 
 ### Scenarios and collector
 
-Produce normal startup, steady running, shutdown, legitimate maintenance, grid outage and generator recovery, and four required attacks: command injection, replay, valid command at the wrong moment, and slow setpoint drift. Every event carries scenario ID and ground-truth label. Capture commands, responses, and telemetry in a common schema: timestamp, scenario_id, source, actor, command, target, value, mode, tank_level, valve_state, pump_state, sequence_id, ground_truth. Use SQLite WAL and retain raw JSON.
+Produce normal startup, steady running, shutdown, legitimate maintenance, grid outage and generator recovery, and attack scenarios: command injection, replay, valid command at the wrong moment, slow setpoint drift, and statistical baseline anomalies (low tank, high limit, mode context). Jitter variants prove detection relies on process context, not fixed timing. Every event carries scenario ID and ground-truth label. Capture commands, responses, and telemetry in a common schema: timestamp, scenario_id, source, actor, command, target, value, mode, tank_level, valve_state, pump_state, sequence_id, ground_truth. Use SQLite WAL and retain raw JSON.
 
 The Nigerian context improves realism but does not change the ground truth to fit a story. Grid loss, generator transfer and demand changes are benign scenarios unless an independently unsafe command occurs.
 
@@ -40,7 +40,7 @@ Layer invariant rules, replay checks, rate/drift checks, and robust per-command/
 
 ### API and dashboard
 
-FastAPI endpoints: health, events, alerts, alert acknowledgement, scenario start, and metrics. A minimal browser UI shows live state, alert queue, event detail, and scenario selection. Use WebSocket or polling, with last-known state when disconnected.
+FastAPI endpoints: health, events, alerts, alert acknowledgement, scenario start, and metrics. A minimal browser UI shows live state, alert queue, event detail, and scenario selection. Uses HTTP polling with 2-second interval; Server-Sent Events transport is in progress. Last-known state when disconnected.
 
 ### Evaluation
 
@@ -50,16 +50,16 @@ Use held-out scenarios. Report per-attack recall, precision, false alerts per no
 
 All components run locally. If the UI or network disappears, collection continues in SQLite and the dashboard catches up by event ID after reconnection. Uncertain cases become review alerts and never issue a control command. A confirmed simulator action records the operator, alert, exact command, timestamp, and resulting state. Bind Modbus to localhost, validate registers and schemas, and hash-chain append-only events for tamper evidence.
 
-## Three-week delivery
+## Delivery
 
-1. Week 1: simulator, register map, normal scenarios, storage, deterministic replay.
-2. Week 2: attacks, detector, evaluation harness, explanation format.
-3. Week 3: dashboard, offline demo, tests, write-up, packaging, rehearsal.
+1. Simulator, register map, normal scenarios, storage, deterministic replay.
+2. Attacks, detector, evaluation harness, explanation format.
+3. Dashboard, offline demo, tests, write-up, packaging, rehearsal.
 
 ## Definition of done
 
 One command starts the demo. A judge can select a scenario, watch the process, see an alert within one second, read its explanation, inspect evidence, acknowledge it, and export metrics. Replay or modification is detected. Results regenerate from a documented seed.
 
-## Alternatives
+## Alternatives considered
 
-Tracks D and G are strong runner-ups with excellent synthetic data and dashboards. H is technically simplest but risks looking like a basic hashing utility. B and C require more privacy and healthcare workflow validation. A needs scarce fraud labels and careful false-positive economics. F needs real user testing. E best balances technical depth, controllable ground truth, and memorable demonstration.
+Other tracks were evaluated during selection. Track E best balances technical depth, controllable ground truth, and memorable demonstration for a cybersecurity and development team.

@@ -47,7 +47,7 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 git diff --check
 ```
 
-Lint and format rules are configured in `pyproject.toml` (tool: ruff, pinned in `requirements-dev.txt`). Coding conventions live in `AGENTS.md`.
+Lint and format rules are configured in `pyproject.toml` (tool: ruff, pinned in `requirements-dev.txt`).
 
 Do not commit `.venv`, SQLite runtime databases, caches, credentials, real personal data, or unreviewed generated output.
 
