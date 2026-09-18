@@ -7,10 +7,8 @@ restarts and detector replay. The API only reads and acknowledges alerts; it
 never issues or blocks a control action, and acknowledgement is an engineer
 record, not an action SafeCO takes on the plant.
 
-Route ordering note: the fixed sub-paths ``/alerts/acknowledged`` and
-``/alerts/unacknowledged`` are declared before the ``/alerts/{alert_id}`` path
-parameter so those words are matched as literal routes rather than captured as an
-alert id.
+Acknowledged/unacknowledged views are served by ``GET /alerts?acknowledged=``
+rather than dedicated sub-paths, so there is one filtering route to reason about.
 """
 
 from __future__ import annotations
@@ -33,7 +31,8 @@ def list_alerts(
     Alerts are ordered most-urgent-first (by severity, then id) so the operator
     sees the highest-severity findings at the top. The optional ``acknowledged``
     filter lets a caller request one side of the queue without client-side
-    filtering.
+    filtering: ``?acknowledged=false`` is the pending work list and
+    ``?acknowledged=true`` the handled history.
 
     Args:
         store: The shared alert store, injected per request.
@@ -46,49 +45,6 @@ def list_alerts(
 
     """
     return store.list_alerts(acknowledged=acknowledged, limit=limit)
-
-
-@router.get("/alerts/unacknowledged")
-def list_unacknowledged_alerts(
-    store: AlertStoreDep,
-    limit: int = Query(default=50, ge=1, le=500),
-) -> list[dict[str, object]]:
-    """Return the pending (unacknowledged) alert queue.
-
-    This is the operator's work list: findings that no engineer has confirmed
-    seeing yet. It is a convenience alias for ``/alerts?acknowledged=false``.
-
-    Args:
-        store: The shared alert store, injected per request.
-        limit: Maximum number of alerts to return (1-500).
-
-    Returns:
-        A list of unacknowledged alert dicts, most urgent first.
-
-    """
-    return store.list_alerts(acknowledged=False, limit=limit)
-
-
-@router.get("/alerts/acknowledged")
-def list_acknowledged_alerts(
-    store: AlertStoreDep,
-    limit: int = Query(default=50, ge=1, le=500),
-) -> list[dict[str, object]]:
-    """Return the alerts an engineer has already acknowledged.
-
-    This is the history side of the queue, useful for reviewing what has been
-    handled without paging through the whole feed. It is a convenience alias for
-    ``/alerts?acknowledged=true``.
-
-    Args:
-        store: The shared alert store, injected per request.
-        limit: Maximum number of alerts to return (1-500).
-
-    Returns:
-        A list of acknowledged alert dicts, most urgent first.
-
-    """
-    return store.list_alerts(acknowledged=True, limit=limit)
 
 
 @router.get("/alerts/{alert_id}")

@@ -15,7 +15,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from .alerts import SEVERITY_RANK, Alert, Severity
+from .alerts import SEVERITY_RANK, Alert
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS alerts (
@@ -95,7 +95,7 @@ class AlertStore:
                     alert.alert_id,
                     alert.event_id,
                     str(alert.severity),
-                    SEVERITY_RANK[Severity(alert.severity)],
+                    SEVERITY_RANK[alert.severity],
                     str(alert.reason_code),
                     alert.title,
                     alert.explanation,

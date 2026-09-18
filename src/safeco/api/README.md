@@ -35,8 +35,8 @@ All routes below are implemented and backed by persistent SQLite storage
 
 ### Alerts (alert store)
 
-- `GET /api/alerts` — persisted detector alerts, most urgent first, `acknowledged` filter
-- `GET /api/alerts/unacknowledged` — the pending alert queue
+- `GET /api/alerts` — persisted detector alerts, most urgent first; `acknowledged`
+  filter (`?acknowledged=false` pending, `?acknowledged=true` handled)
 - `GET /api/alerts/{alert_id}` — single alert, 404 if unknown
 - `PATCH /api/alerts/{alert_id}/ack` — record engineer acknowledgement (404 if unknown)
 

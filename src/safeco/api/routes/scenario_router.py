@@ -12,28 +12,24 @@ from fastapi import APIRouter, HTTPException, Query
 
 from safeco.api.deps import AlertStoreDep, StoreDep
 from safeco.api.scenario_runner import run_scenario_and_persist
-from safeco.scenarios import ATTACK_JITTER_SCENARIOS, ATTACK_SCENARIOS, NORMAL_SCENARIOS
+from safeco.scenarios import runnable_scenarios
 
 router = APIRouter(tags=["scenarios"])
 
 
 @router.get("/scenarios")
 async def list_scenarios() -> list[str]:
-    """List every scenario id the operator can run.
+    """List every scenario the dashboard picker offers.
 
-    Merges the normal, base-attack, and timing-jitter attack registries so the
-    dashboard's scenario picker exposes every runnable scenario.
+    Resolved against ``runnable_scenarios`` — the same set the run and detail
+    routes accept — so the picker can never offer an id the run route would
+    refuse, nor hide one it would accept.
 
     Returns:
         A sorted list of scenario id strings.
 
     """
-    all_scenarios = {
-        **NORMAL_SCENARIOS,
-        **ATTACK_SCENARIOS,
-        **ATTACK_JITTER_SCENARIOS,
-    }
-    return sorted(all_scenarios.keys())
+    return sorted(runnable_scenarios())
 
 
 @router.get("/scenarios/{scenario_id}")
@@ -41,7 +37,10 @@ async def get_scenario(scenario_id: str) -> dict[str, str]:
     """Return metadata confirming a scenario id is known.
 
     Used to validate a scenario id before running it. Execution is a separate
-    POST so a read of this route never changes state.
+    POST so a read of this route never changes state. The id is checked against
+    the full runnable set (``runnable_scenarios``) — the same set the run route
+    uses — so this never 404s an id that ``POST /scenarios/{id}/run`` would
+    accept.
 
     Args:
         scenario_id: The registry key to look up.
@@ -50,15 +49,10 @@ async def get_scenario(scenario_id: str) -> dict[str, str]:
         A dict with the scenario id and a ``registered`` status.
 
     Raises:
-        HTTPException: 404 if the id is not in any runnable scenario registry.
+        HTTPException: 404 if the id is not in the runnable scenario set.
 
     """
-    all_scenarios = {
-        **NORMAL_SCENARIOS,
-        **ATTACK_SCENARIOS,
-        **ATTACK_JITTER_SCENARIOS,
-    }
-    if scenario_id not in all_scenarios:
+    if scenario_id not in runnable_scenarios():
         raise HTTPException(
             status_code=404, detail=f"scenario {scenario_id!r} not found"
         )
