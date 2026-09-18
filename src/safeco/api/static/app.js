@@ -231,10 +231,12 @@ function renderPlant(payload) {
     const waterH = 320 - waterTop;
     waterRect.setAttribute("y", waterTop);
     waterRect.setAttribute("height", waterH);
-    // Position wave groups at the water surface (y-attr, not transform)
-    if (waveBack) waveBack.setAttribute("y", waterTop);
-    if (waveMid) waveMid.setAttribute("y", waterTop);
-    if (waveFront) waveFront.setAttribute("y", waterTop);
+    // Position wave groups at the water surface via transform (y attr
+    // is not valid on <g>; CSS animation on the inner <g> is separate).
+    const waveY = `translate(0, ${waterTop})`;
+    if (waveBack) waveBack.setAttribute("transform", waveY);
+    if (waveMid) waveMid.setAttribute("transform", waveY);
+    if (waveFront) waveFront.setAttribute("transform", waveY);
     pctText.textContent = `${level.toFixed(1)}%`;
     // Position pct text: above water if enough room, otherwise centered
     const textY = level > 12 ? waterTop - 18 : 160;
@@ -248,12 +250,13 @@ function renderPlant(payload) {
     svg.classList.toggle("animate", shouldAnimate);
   }
 
-  // Status card — matches the plant detector: only two states exist.
-  // Critical: level >= high_level_limit  (real detector rule)
-  // Normal:   level < high_level_limit
+  // Status card — matches the detector: only fires when mode is running
+  // AND level exceeds the limit. Otherwise Normal.
   const limit = p.high_level_limit;
   const target = p.target_level;
-  const over = limit !== null && limit !== undefined && level >= Number(limit);
+  const isRunning = p.mode === "running";
+  const over = isRunning && limit !== null && limit !== undefined
+    && level > Number(limit);
   const statusDot = body.querySelector('[data-field="tank_status_dot"]');
   const statusText = body.querySelector('[data-field="tank_status"]');
   const targetDisp = body.querySelector('[data-field="tank_target_display"]');
@@ -636,9 +639,9 @@ function eventsUrl() {
 
 /* ---------- Poll loop ---------- */
 
-async function refresh() {
+async function refresh(manual = false) {
   const btn = document.getElementById("refresh-btn");
-  if (btn) {
+  if (manual && btn) {
     btn.disabled = true;
     btn.textContent = "Refreshing…";
   }
@@ -678,7 +681,7 @@ async function refresh() {
       renderHealth(state.lastGood.health);
     }
   } finally {
-    if (btn) {
+    if (manual && btn) {
       btn.disabled = false;
       btn.textContent = "Refresh";
     }
@@ -710,7 +713,7 @@ function start() {
   setupPager("alerts", rerenderAlerts);
   setupPager("events", rerenderEvents);
   document.getElementById("scenario-form").addEventListener("submit", runScenario);
-  document.getElementById("refresh-btn").addEventListener("click", refresh);
+  document.getElementById("refresh-btn").addEventListener("click", () => refresh(true));
   loadScenarios();
   refresh();
   setInterval(refresh, POLL_MS);

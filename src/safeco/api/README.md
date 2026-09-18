@@ -80,7 +80,8 @@ refreshes immediately after any operator action.
 
 The monitored-site identity is fixed to Adupe Municipal Water Station, the
 fictional facility modelled by this submission. The palette is flat (light
-content, a dark sidebar, status/severity colours — no gradients). If the local
+content, a dark sidebar, status/severity colours) with a single subtle
+gradient on the tank water fill for visual clarity. If the local
 feed is lost the console keeps the last-known values and shows a
 degraded-visibility banner. It never implies SafeCO acted automatically;
 acknowledgement is an engineer record, not a plant action.

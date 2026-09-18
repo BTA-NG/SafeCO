@@ -3,8 +3,8 @@
 The dashboard is a local, advisory operator console with tabbed views for each
 concern (plant, alerts, events, scenarios). These tests pin the route wiring, the
 tabbed structure, and the design constraints: served from the app, wired to the
-real API endpoints, white content background, a flat multi-colour palette (no
-gradients), and no implied automatic action.
+real API endpoints, white content background, a flat multi-colour palette with a
+single subtle tank-fill gradient, and no implied automatic action.
 """
 
 from __future__ import annotations
@@ -157,11 +157,12 @@ def test_dashboard_never_implies_automatic_action() -> None:
 
 
 def test_dashboard_styles_are_plain_but_colourful() -> None:
-    """White content background, no flashy gradients, multi-colour palette.
+    """White content background, multi-colour palette, flat design.
 
     Severity/status colours and a tab accent are expected — a broader
     palette than plain grayscale, still using flat solid fills. A subtle
-    single-hue gradient on the tank-level bar is acceptable for polish.
+    single-hue gradient on the tank water fill is acceptable for
+    visual clarity.
     """
     css = client.get("/static/styles.css").text
     lower = css.lower()

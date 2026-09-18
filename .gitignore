@@ -7,3 +7,7 @@ data/*.db-shm
 data/*.db-wal
 .env
 .DS_Store
+generate_report.py
+SafeCO_Technical_Report.pdf
+generate_report.py
+SafeCO_Technical_Report.pdf

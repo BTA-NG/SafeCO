@@ -162,8 +162,8 @@ git diff --check
   command context and process state.
 - Hash-chain verification detects later modification of stored events. It does
   not prove that a sensor reading was truthful.
-- The dashboard currently refreshes by HTTP polling. Server-Sent Events are a
-  possible follow-up, not a claimed feature.
+- The dashboard currently refreshes by HTTP polling. Server-Sent Events
+  transport is being added in a parallel PR (#21).
 - The confirmed simulator-action concept is documented but not implemented in
   the current dashboard. All current acknowledgements are record-only.
 - Evaluation results are synthetic and scenario-based, not a claim of
