@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from safeco.api.deps import AlertStoreDep, StoreDep
+from safeco.api.deps import AlertStoreDep, BusDep, StoreDep
 from safeco.api.scenario_runner import run_scenario_and_persist
 from safeco.scenarios import runnable_scenarios
 
@@ -64,6 +64,7 @@ def run_scenario_endpoint(
     scenario_id: str,
     store: StoreDep,
     alert_store: AlertStoreDep,
+    bus: BusDep,
     seed: int = Query(default=42, ge=0),
 ) -> dict[str, object]:
     """Run a scenario and persist its events and detector alerts.
@@ -74,10 +75,14 @@ def run_scenario_endpoint(
     (command -> event -> detection -> alert) on demand. It is advisory only: the
     run demonstrates consequences and never acts on a real plant.
 
+    A completed run announces itself on the change bus, so every open dashboard
+    shows the new events and findings without waiting out a poll interval.
+
     Args:
         scenario_id: The scenario registry key to execute.
         store: The shared event store the run writes events to.
         alert_store: The shared alert store the run writes findings to.
+        bus: The change bus the live stream listens on.
         seed: Deterministic RNG seed so a run is reproducible.
 
     Returns:
@@ -89,8 +94,13 @@ def run_scenario_endpoint(
 
     """
     try:
-        return run_scenario_and_persist(scenario_id, seed, store, alert_store)
+        summary = run_scenario_and_persist(scenario_id, seed, store, alert_store)
     except KeyError as exc:
         raise HTTPException(
             status_code=404, detail=f"scenario {scenario_id!r} not found"
         ) from exc
+    # Only after the run is persisted: a woken stream re-reads the stores, so
+    # announcing before the writes land would push the pre-run state and then
+    # leave the stream's fingerprint matching it, suppressing the real update.
+    bus.publish()
+    return summary

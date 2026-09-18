@@ -17,6 +17,7 @@ from safeco.api.routes.event_router import router as event_router
 from safeco.api.routes.health_router import router as health_router
 from safeco.api.routes.plant_state_router import router as plant_state_router
 from safeco.api.routes.scenario_router import router as scenario_router
+from safeco.api.routes.stream_router import router as stream_router
 from safeco.storage import EventStore
 
 DEFAULT_DATABASE = "data/safeco.db"
@@ -79,6 +80,7 @@ app.include_router(event_router, prefix="/api")
 app.include_router(alert_router, prefix="/api")
 app.include_router(plant_state_router, prefix="/api")
 app.include_router(scenario_router, prefix="/api")
+app.include_router(stream_router, prefix="/api")
 
 
 @app.get("/", include_in_schema=False)

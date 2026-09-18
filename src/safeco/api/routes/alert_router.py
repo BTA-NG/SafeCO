@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from safeco.api.deps import AlertStoreDep
+from safeco.api.deps import AlertStoreDep, BusDep
 
 router = APIRouter(tags=["alerts"])
 
@@ -72,15 +72,22 @@ def get_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
 
 
 @router.patch("/alerts/{alert_id}/ack")
-def acknowledge_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
+def acknowledge_alert(
+    store: AlertStoreDep, bus: BusDep, alert_id: str
+) -> dict[str, object]:
     """Record an engineer's acknowledgement of an alert.
 
     Validates that the alert exists and persists the acknowledgement so it
     survives restarts and detector replay. This marks that a human has seen the
     advisory finding; it never changes the plant.
 
+    The acknowledgement announces itself on the change bus, so one engineer's
+    click drops the alert out of every other open console's pending queue rather
+    than leaving their views disagreeing about what is still outstanding.
+
     Args:
         store: The shared alert store, injected per request.
+        bus: The change bus the live stream listens on.
         alert_id: The deterministic identifier of the alert to acknowledge.
 
     Returns:
@@ -93,4 +100,5 @@ def acknowledge_alert(store: AlertStoreDep, alert_id: str) -> dict[str, object]:
     """
     if not store.acknowledge(alert_id):
         raise HTTPException(status_code=404, detail="alert not found")
+    bus.publish()
     return {"alert_id": alert_id, "acknowledged": True}

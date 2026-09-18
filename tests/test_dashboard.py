@@ -141,6 +141,50 @@ def test_dashboard_script_calls_the_real_api() -> None:
     assert "/ack" in script
 
 
+def test_dashboard_script_consumes_the_live_stream() -> None:
+    """The console is pushed to, not polling.
+
+    The dashboard used to re-fetch four endpoints every two seconds, so a new
+    finding could sit invisible for up to two seconds and every console paid for
+    its own polling. It now renders from the live stream, and the timer that
+    drove that polling is gone.
+    """
+    script = client.get("/static/app.js").text
+    assert "EventSource" in script
+    assert "/api/stream" in script
+    assert "setInterval(refresh" not in script
+
+
+def test_dashboard_script_handles_both_stream_frames() -> None:
+    """The stream opens with a snapshot and pushes updates; both must render.
+
+    A dropped stream is also the client's only signal that SafeCO itself is
+    unreachable, since no server-side payload can report on its own behalf.
+    """
+    script = client.get("/static/app.js").text
+    assert '"snapshot"' in script
+    assert '"update"' in script
+    assert "onerror" in script
+
+
+def test_dashboard_script_keeps_a_manual_refresh() -> None:
+    """The operator can still force a re-read without waiting for a push."""
+    script = client.get("/static/app.js").text
+    assert "refresh-btn" in script
+    assert "async function refresh" in script
+
+
+def test_dashboard_script_filters_events_without_refetching() -> None:
+    """The stream carries one unfiltered window, so the filter runs locally.
+
+    Refetching per keystroke would also be pointless: the pushed payload is the
+    same window the filtered request would return.
+    """
+    script = client.get("/static/app.js").text
+    assert "filterEvents" in script
+    assert "scenario_id=" not in script
+
+
 def test_dashboard_indicates_degraded_visibility_when_feed_lost() -> None:
     """Offline story: the page must be able to show degraded visibility."""
     body = client.get("/").text

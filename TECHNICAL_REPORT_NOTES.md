@@ -99,7 +99,14 @@ A vanilla HTML/CSS/JS dashboard (no build step, no framework) served by the Fast
 - Scenarios: select, set seed, run, see results appear
 - System health: feed status, event count, hash chain integrity
 
-**How it updates:** 2-second HTTP polling (SSE transport in progress). Refreshes immediately after scenario runs, acknowledgement, filter changes, or manual button click.
+**How it updates:** The server pushes a full payload over Server-Sent Events
+(`GET /api/stream`) on connect and again whenever stored state changes, so a new
+finding appears as it lands rather than up to a poll interval later. The browser
+reconnects on its own if the stream drops. The Refresh button, and actions whose
+result the operator is waiting on — a scenario run or an acknowledgement —
+re-read the REST endpoints directly. View-only controls (the alert filters, the
+alert-id search and the event scenario filter) re-render what is already on
+screen rather than re-reading the feed.
 
 ---
 
