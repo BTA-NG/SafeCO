@@ -175,13 +175,14 @@ body {
 .topbar {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
-  padding: 14px 24px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 14px;
   flex-wrap: wrap;
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+  position: relative;
 }
 
 .site {
@@ -189,21 +190,25 @@ body {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  flex: 1;
+  padding: 0 16px;
 }
 
 .site-label {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 1.2px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 700;
+  margin-bottom: 2px;
 }
 
 .site-name {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 22px;
+  font-weight: 900;
   color: var(--ink);
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
 }
 
 .site-context {
@@ -211,6 +216,7 @@ body {
   font-size: 12px;
   font-weight: 500;
   font-style: italic;
+  margin-top: 1px;
 }
 
 .live {
@@ -219,6 +225,8 @@ body {
   gap: 9px;
   font-size: 13px;
   color: var(--muted);
+  position: absolute;
+  right: 24px;
 }
 
 .live-dot {
