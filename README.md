@@ -8,7 +8,7 @@
   <a href="#"><img src="https://img.shields.io/badge/Modbus-TCP-lightgrey.svg" alt="Modbus TCP"></a>
   <a href="#"><img src="https://img.shields.io/badge/SQLite-storage-lightgrey.svg" alt="SQLite"></a>
   <a href="#"><img src="https://img.shields.io/badge/FastAPI-backend-009688.svg" alt="FastAPI"></a>
-  <img src="https://img.shields.io/badge/tests-277%20passing-2ea043.svg" alt="277 tests">
+  <img src="https://img.shields.io/badge/tests-292%20passing-2ea043.svg" alt="292 tests">
 </p>
 
 <p align="center"><strong>Detect → Explain → Recommend → Human Decides</strong></p>

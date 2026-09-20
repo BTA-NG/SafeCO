@@ -153,7 +153,7 @@ PYTHONPATH=src .venv/bin/python -m pytest -q  # Tests
 git diff --check                         # Whitespace
 ```
 
-Current status: 277 tests passing, 28 third-party warnings (Starlette/FastAPI deprecations under Python 3.14, not failures).
+Current status: 292 tests passing, 26 third-party warnings (Starlette/FastAPI deprecations under Python 3.14, not failures).
 
 ---
 
