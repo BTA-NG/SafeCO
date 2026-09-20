@@ -54,6 +54,12 @@ The detector applies five sequential layers:
 4. **Command-rate and setpoint-drift** — Monitors cumulative changes over time
 5. **Statistical baseline** — Robust median/MAD anomaly detection on telemetry features
 
+<p align="center">
+  <img src="docs/flowchart.png" alt="SafeCO end-to-end flow" width="800" />
+</p>
+
+Full end-to-end flow, including the layers above: [`docs/flowchart.md`](docs/flowchart.md).
+
 ## Quick Start
 
 ```bash
