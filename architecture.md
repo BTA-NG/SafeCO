@@ -40,7 +40,7 @@ Layer invariant rules, replay checks, rate/drift checks, and robust per-command/
 
 ### API and dashboard
 
-FastAPI endpoints: health, events, alerts, alert acknowledgement, scenario start, and metrics. A minimal browser UI shows live state, alert queue, event detail, and scenario selection. Uses HTTP polling with 2-second interval; Server-Sent Events transport is in progress. Last-known state when disconnected.
+FastAPI endpoints: health, events, alerts, alert acknowledgement, scenario start, and metrics. A minimal browser UI shows live state, alert queue, event detail, and scenario selection. Uses Server-Sent Events for real-time push updates. Falls back to last-known state when disconnected.
 
 ### Evaluation
 
