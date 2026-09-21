@@ -59,6 +59,7 @@ The detector applies five sequential layers:
 </p>
 
 Full end-to-end flow, including the layers above: [`docs/flowchart.md`](docs/flowchart.md).
+Ordered runtime walkthrough of a single scenario run: [`docs/sequence.md`](docs/sequence.md).
 
 ## Quick Start
 
